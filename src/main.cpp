@@ -85,7 +85,7 @@ uint32_t preReceivedState_Color = 0;
 void initializeHardware();
 void loadConfiguration();
 void saveConfiguration();
-void setupWifi();
+bool setupWifi();
 void setupWebServer();
 void setupMqtt();
 void reconnectMqtt();
@@ -110,12 +110,18 @@ void setup() {
 
   loadConfiguration(); // Gespeicherte Einstellungen laden
 
+  bool wifiConnected = false;
   // Prüfen, ob eine SSID konfiguriert ist
   if (strlen(config.ssid) > 0 && strcmp(config.ssid, "DEIN_WLAN_SSID") != 0) {
-    // SSID ist konfiguriert, starte im normalen Modus
+    // Versuche, eine Verbindung zum gespeicherten WLAN herzustellen
+    wifiConnected = setupWifi();
+  }
+
+  if (wifiConnected) {
+    // WLAN-Verbindung erfolgreich, starte im normalen Modus
     startNormalMode();
   } else {
-    // Keine SSID konfiguriert, starte im Access-Point-Modus zur Einrichtung
+    // Keine SSID konfiguriert ODER Verbindung fehlgeschlagen, starte AP-Modus
     startApMode();
   }
 }
@@ -157,8 +163,7 @@ void initializeHardware() {
 void startNormalMode() {
   Serial.println("Starte im normalen Modus...");
   
-  // Netzwerk-Dienste starten
-  setupWifi();
+  // Netzwerk-Dienste starten (WiFi ist bereits verbunden)
   setupWebServer();
   setupMqtt();
   
@@ -195,21 +200,33 @@ void startApMode() {
 
   Serial.println("AP-Modus-Setup abgeschlossen. Verbinde dich mit dem WLAN und öffne eine beliebige Webseite.");
 }
-void setupWifi() {
+bool setupWifi() {
+  const unsigned long wifiTimeout = 30000; // 30 Sekunden Timeout
+  unsigned long startTime = millis();
+
   Serial.print("Verbinde mit WLAN: ");
   Serial.println(config.ssid);
+  WiFi.mode(WIFI_STA); // Explizit in den Station-Modus wechseln
   WiFi.begin(config.ssid, config.password);
+
   while (WiFi.status() != WL_CONNECTED) {
+    if (millis() - startTime >= wifiTimeout) {
+      Serial.println("\nVerbindung zum WLAN fehlgeschlagen (Timeout).");
+      WiFi.disconnect(); // Verbindung abbrechen
+      return false;
+    }
     delay(500);
     Serial.print(".");
   }
+
   Serial.println("\nWLAN verbunden!");
   Serial.print("IP-Adresse: ");
   Serial.println(WiFi.localIP());
 
-  // Zeit via NTP synchronisieren (Zeitzone für Mitteleuropa: CET/CEST)
+  // Zeit via NTP synchronisieren
   Serial.println("Synchronisiere Zeit via NTP...");
   configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
+  return true;
 }
 
 // Hilfsfunktion, um einen Hex-String (z.B. "#RRGGBB") in eine 32-Bit-Farbe umzuwandeln
