@@ -7,6 +7,7 @@
 #include <PubSubClient.h>
 #include <Preferences.h>
 #include <DNSServer.h>
+#include <time.h>
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
@@ -14,15 +15,13 @@
 #define BUTTON_PIN 4          // Pin für den Taster
 #define NEOPIXEL_PIN 13        // Pin für den NeoPixel-Ring (geändert auf einen sichereren Pin)
 #define TOUCH_PIN 32          // Kapazitiver Touch-Pin (GPIO9)
-#define BRIGHTNESS_TOUCH_PIN 27 // Kapazitiver Touch-Pin für die Helligkeit (T7)
 
 // -- NeoPixel-Einstellungen --
 #define NUM_PIXELS 16         // Anzahl der LEDs im Ring
 
 // -- Touch-Einstellungen --
 #define TOUCH_THRESHOLD 40    // Schwellenwert für die Berührungserkennung
-#define BRIGHTNESS_TOUCH_THRESHOLD 40 // Schwellenwert für die Helligkeitssteuerung
-#define TOUCH_DEBOUNCE_DELAY 250 // Entprellzeit in ms
+#define BRIGHTNESS_ANIM_DELAY 10 // Zeit in ms zwischen den Helligkeitsschritten
 #define BRIGHTNESS_ANIM_DELAY 10 // Zeit in ms zwischen den Helligkeitsschritten
 
 // -- Taster-Einstellungen --
@@ -40,6 +39,9 @@ struct Config {
   char mqttUser[32];
   char mqttPassword[64];
   uint32_t identityColor;
+  bool quietModeEnabled;
+  uint8_t quietHourStart;
+  uint8_t quietHourEnd;
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -57,7 +59,6 @@ DNSServer dnsServer;
 bool isLampOn = true;
 uint32_t currentColor = pixels.Color(255, 255, 255);
 uint8_t currentBrightness = 255;
-unsigned long lastTouchTime = 0;
 int buttonState;
 int lastButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
@@ -65,6 +66,11 @@ unsigned long lastDebounceTime = 0;
 // -- Helligkeits-Animation --
 int brightnessDirection = -1; // -1 für dunkler, 1 für heller
 unsigned long lastBrightnessAnimTime = 0;
+
+// -- Kombinierte Touch-Steuerung --
+enum TouchState { IDLE, TOUCH_DETECTED, LONG_TOUCH_ACTIVE };
+TouchState touchState = IDLE;
+unsigned long touchStartTime = 0;
 
 // == Timer-Zustand =========================================================
 #define RECEIVED_COLOR_DURATION 10000 
@@ -93,6 +99,7 @@ void handleReceivedColorMode();
 uint32_t hexToColor(String hex);
 void startNormalMode();
 void startApMode();
+bool isQuietTime();
 
 // == Hauptprogramm =========================================================
 void setup() {
@@ -129,7 +136,6 @@ void loop() {
     handleButtonPress();
     handlePotentiometer();
     handleTouch();
-    handleBrightnessTouch();
   } else if (WiFi.getMode() == WIFI_AP) {
     // Im AP-Modus DNS-Anfragen für das Captive-Portal verarbeiten
     dnsServer.processNextRequest();
@@ -200,6 +206,10 @@ void setupWifi() {
   Serial.println("\nWLAN verbunden!");
   Serial.print("IP-Adresse: ");
   Serial.println(WiFi.localIP());
+
+  // Zeit via NTP synchronisieren (Zeitzone für Mitteleuropa: CET/CEST)
+  Serial.println("Synchronisiere Zeit via NTP...");
+  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org", "time.nist.gov");
 }
 
 // Hilfsfunktion, um einen Hex-String (z.B. "#RRGGBB") in eine 32-Bit-Farbe umzuwandeln
@@ -214,53 +224,226 @@ uint32_t hexToColor(String hex) {
 void setupWebServer() {
   // Konfigurationsseite unter der Haupt-URL "/"
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    String html = "<html><head><title>Freundschaftslampe Konfiguration</title>";
-    html += "<meta charset=\"UTF-8\">";
-    html += "<style>";
-    html += "body { font-family: sans-serif; background-color: #222; color: #eee; }";
-    html += "div { margin: 0 auto; width: 80%; max-width: 600px; padding: 20px; }";
-    html += "h1, h2 { text-align: center; }";
-    html += "form { display: flex; flex-direction: column; }";
-    html += "label { margin-top: 10px; }";
-    html += "input { padding: 8px; margin-top: 5px; background-color: #333; color: #eee; border: 1px solid #555; border-radius: 4px; }";
-    html += "textarea { padding: 8px; margin-top: 5px; background-color: #333; color: #eee; border: 1px solid #555; border-radius: 4px; font-family: monospace; }";
-    html += "input[type='submit'] { background-color: #007bff; color: white; cursor: pointer; margin-top: 20px;}";
-    html += "</style></head><body><div>";
-    html += "<h1>Freundschaftslampe</h1><h2>Konfiguration</h2>";
-    html += "<form action='/save' method='POST'>";
-    
-    html += "<h2>WLAN-Einstellungen</h2>";
-    html += "<label for='ssid'>WLAN SSID:</label>";
-    html += "<input type='text' id='ssid' name='ssid' value='" + String(config.ssid) + "'>";
-    html += "<label for='password'>WLAN Passwort:</label>";
-    html += "<input type='password' id='password' name='password' value='" + String(config.password) + "'>";
-    
-    html += "<h2>MQTT-Einstellungen</h2>";
-    html += "<label for='mqtt'>MQTT Broker:</label>";
-    html += "<input type='text' id='mqtt' name='mqtt' value='" + String(config.mqttServer) + "'>";
-    html += "<label for='mqtt_port'>MQTT Port:</label>";
-    html += "<input type='number' id='mqtt_port' name='mqtt_port' value='" + String(config.mqttPort) + "'>";
-    html += "<label for='mqtt_tls'>MQTT mit TLS/SSL</label>";
-    html += "<input type='checkbox' id='mqtt_tls' name='mqtt_tls' " + String(config.mqttTls ? "checked" : "") + ">";
-    html += "<label for='mqtt_ca'>CA Zertifikat (optional):</label>";
-    html += "<textarea id='mqtt_ca' name='mqtt_ca' rows='10'>" + String(config.mqttCaCert) + "</textarea>";
-    html += "<label for='mqtt_topic'>MQTT Topic:</label>";
-    html += "<input type='text' id='mqtt_topic' name='mqtt_topic' value='" + String(config.mqttTopic) + "'>";
-    html += "<label for='mqtt_user'>MQTT Benutzername (optional):</label>";
-    html += "<input type='text' id='mqtt_user' name='mqtt_user' value='" + String(config.mqttUser) + "'>";
-    html += "<label for='mqtt_pass'>MQTT Passwort (optional):</label>";
-    html += "<input type='password' id='mqtt_pass' name='mqtt_pass' value='" + String(config.mqttPassword) + "'>";
+    String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Freundschaftslampe Konfiguration</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #1c1e21;
+      font-size: 2em;
+      margin-bottom: 1em;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+      background-color: #fafafa;
+    }
+    legend {
+      font-size: 1.2em;
+      font-weight: 600;
+      padding: 0 10px;
+      color: #007bff;
+      margin-left: 10px;
+    }
+    label {
+      font-weight: 600;
+      margin-top: 15px;
+      margin-bottom: 5px;
+    }
+    input[type='text'], input[type='password'], input[type='number'], textarea {
+      padding: 12px;
+      margin-top: 5px;
+      background-color: #fff;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 1em;
+      width: 100%;
+      box-sizing: border-box;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    input:focus, textarea:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        outline: none;
+    }
+    textarea {
+      font-family: monospace;
+      resize: vertical;
+      min-height: 120px;
+    }
+    .checkbox-container {
+        display: flex;
+        align-items: center;
+        margin-top: 15px;
+    }
+    input[type='checkbox'] {
+        margin-right: 10px;
+        width: 18px;
+        height: 18px;
+    }
+    .checkbox-container label {
+        margin-top: 0; /* Align label with checkbox */
+        font-weight: normal;
+    }
+    input[type='color'] {
+        width: 100%;
+        height: 45px;
+        padding: 5px;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        box-sizing: border-box;
+    }
+    input[type='submit'] {
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      margin-top: 30px;
+      padding: 15px;
+      font-size: 1.1em;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      transition: background-color 0.3s;
+    }
+    input[type='submit']:hover {
+        background-color: #0056b3;
+    }
+    .help-text {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 5px;
+    }
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+      }
+      .container {
+        padding: 15px;
+      }
+      fieldset {
+        padding: 15px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+      legend {
+        font-size: 1.1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Freundschaftslampe</h1>
+    <form action='/save' method='POST'>
+      
+      <fieldset>
+        <legend>WLAN-Einstellungen</legend>
+        <label for='ssid'>WLAN SSID:</label>
+        <input type='text' id='ssid' name='ssid' placeholder="z.B. MeinWLAN" value=''>
+        <label for='password'>WLAN Passwort:</label>
+        <input type='password' id='password' name='password' value=''>
+      </fieldset>
 
-    html += "<h2>Lampen-Einstellungen</h2>";
-    // Farbe in Hex umwandeln für den Color-Picker
+      <fieldset>
+        <legend>MQTT-Einstellungen</legend>
+        <label for='mqtt'>MQTT Broker:</label>
+        <input type='text' id='mqtt' name='mqtt' placeholder="z.B. broker.hivemq.com" value=''>
+        <label for='mqtt_port'>MQTT Port:</label>
+        <input type='number' id='mqtt_port' name='mqtt_port' placeholder="z.B. 1883" value='1883'>
+        <div class="checkbox-container">
+          <input type='checkbox' id='mqtt_tls' name='mqtt_tls'>
+          <label for='mqtt_tls'>MQTT mit TLS/SSL</label>
+        </div>
+        <label for='mqtt_ca'>CA Zertifikat (optional):</label>
+        <textarea id='mqtt_ca' name='mqtt_ca' placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
+        <label for='mqtt_topic'>MQTT Topic:</label>
+        <input type='text' id='mqtt_topic' name='mqtt_topic' placeholder="z.B. freundschaft/farbe" value='freundschaft/farbe'>
+        <label for='mqtt_user'>MQTT Benutzername (optional):</label>
+        <input type='text' id='mqtt_user' name='mqtt_user' value=''>
+        <label for='mqtt_pass'>MQTT Passwort (optional):</label>
+        <input type='password' id='mqtt_pass' name='mqtt_pass' value=''>
+      </fieldset>
+      
+      <fieldset>
+        <legend>Lampen-Einstellungen</legend>
+        <label for='color'>Deine Identitätsfarbe:</label>
+        <p class="help-text">Diese Farbe wird gesendet, wenn du den Knopf drückst.</p>
+        <input type='color' id='color' name='color' value='#0000FF'>
+      </fieldset>
+
+      <fieldset>
+        <legend>Ruhemodus</legend>
+        <p class="help-text">Die Lampe leuchtet nachts nicht auf, wenn Nachrichten empfangen werden.</p>
+        <div class="checkbox-container">
+          <input type='checkbox' id='quiet_enabled' name='quiet_enabled'>
+          <label for='quiet_enabled'>Ruhemodus aktivieren</label>
+        </div>
+        <label for='quiet_start'>Startzeit (Stunde, 0-23):</label>
+        <input type='number' id='quiet_start' name='quiet_start' min='0' max='23' value='22'>
+        <label for='quiet_end'>Endzeit (Stunde, 0-23):</label>
+        <input type='number' id='quiet_end' name='quiet_end' min='0' max='23' value='6'>
+      </fieldset>
+
+      <input type='submit' value='Speichern & Neustarten'>
+    </form>
+  </div>
+  <script>
+    // This script will be populated with the current config values
+  </script>
+</body>
+</html>
+)rawliteral";
+
+    // --- Dynamische Werte einfügen ---
+    String script;
+    script += "document.getElementById('ssid').value = '" + String(config.ssid) + "';\n";
+    script += "document.getElementById('password').value = '" + String(config.password) + "';\n";
+    script += "document.getElementById('mqtt').value = '" + String(config.mqttServer) + "';\n";
+    script += "document.getElementById('mqtt_port').value = '" + String(config.mqttPort) + "';\n";
+    script += "document.getElementById('mqtt_tls').checked = " + String(config.mqttTls ? "true" : "false") + ";\n";
+    script += "document.getElementById('mqtt_ca').value = `" + String(config.mqttCaCert) + "`;\n";
+    script += "document.getElementById('mqtt_topic').value = '" + String(config.mqttTopic) + "';\n";
+    script += "document.getElementById('mqtt_user').value = '" + String(config.mqttUser) + "';\n";
+    script += "document.getElementById('mqtt_pass').value = '" + String(config.mqttPassword) + "';\n";
     char hexColor[8];
     sprintf(hexColor, "#%06X", config.identityColor);
-    html += "<label for='color'>Deine Identitätsfarbe:</label>";
-    html += "<input type='color' id='color' name='color' value='" + String(hexColor) + "'>";
+    script += "document.getElementById('color').value = '" + String(hexColor) + "';\n";
+    script += "document.getElementById('quiet_enabled').checked = " + String(config.quietModeEnabled ? "true" : "false") + ";\n";
+    script += "document.getElementById('quiet_start').value = '" + String(config.quietHourStart) + "';\n";
+    script += "document.getElementById('quiet_end').value = '" + String(config.quietHourEnd) + "';\n";
 
-    html += "<input type='submit' value='Speichern & Neustarten'>";
-    html += "</form>";
-    html += "</div></body></html>";
+    html.replace("<script>\n    // This script will be populated with the current config values\n  </script>", "<script>\n" + script + "</script>");
     
     request->send(200, "text/html", html);
   });
@@ -268,45 +451,95 @@ void setupWebServer() {
   // Endpunkt zum Speichern der Konfiguration
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
     // Parameter auslesen
-    if (request->hasParam("ssid", true)) strcpy(config.ssid, request->getParam("ssid", true)->value().c_str());
-    if (request->hasParam("password", true)) strcpy(config.password, request->getParam("password", true)->value().c_str());
-    if (request->hasParam("mqtt", true)) strcpy(config.mqttServer, request->getParam("mqtt", true)->value().c_str());
+    if (request->hasParam("ssid", true)) strlcpy(config.ssid, request->getParam("ssid", true)->value().c_str(), sizeof(config.ssid));
+    if (request->hasParam("password", true)) strlcpy(config.password, request->getParam("password", true)->value().c_str(), sizeof(config.password));
+    if (request->hasParam("mqtt", true)) strlcpy(config.mqttServer, request->getParam("mqtt", true)->value().c_str(), sizeof(config.mqttServer));
     if (request->hasParam("mqtt_port", true)) config.mqttPort = request->getParam("mqtt_port", true)->value().toInt();
     config.mqttTls = request->hasParam("mqtt_tls", true);
-    if (request->hasParam("mqtt_ca", true)) strcpy(config.mqttCaCert, request->getParam("mqtt_ca", true)->value().c_str());
-    if (request->hasParam("mqtt_topic", true)) strcpy(config.mqttTopic, request->getParam("mqtt_topic", true)->value().c_str());
-    if (request->hasParam("mqtt_user", true)) strcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str());
-    if (request->hasParam("mqtt_pass", true)) strcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str());
+    if (request->hasParam("mqtt_ca", true)) strlcpy(config.mqttCaCert, request->getParam("mqtt_ca", true)->value().c_str(), sizeof(config.mqttCaCert));
+    if (request->hasParam("mqtt_topic", true)) strlcpy(config.mqttTopic, request->getParam("mqtt_topic", true)->value().c_str(), sizeof(config.mqttTopic));
+    if (request->hasParam("mqtt_user", true)) strlcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str(), sizeof(config.mqttUser));
+    if (request->hasParam("mqtt_pass", true)) strlcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str(), sizeof(config.mqttPassword));
     if (request->hasParam("color", true)) {
       config.identityColor = hexToColor(request->getParam("color", true)->value());
     }
+    config.quietModeEnabled = request->hasParam("quiet_enabled", true);
+    if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
+    if (request->hasParam("quiet_end", true)) config.quietHourEnd = request->getParam("quiet_end", true)->value().toInt();
 
     // Konfiguration speichern
     saveConfiguration();
 
     // Erfolgsseite mit Neustart-Button
-    String html = "<html><head><title>Gespeichert!</title>";
-    html += "<meta charset=\"UTF-8\">";
-    html += "<style>";
-    html += "body { font-family: sans-serif; background-color: #222; color: #eee; text-align: center; padding-top: 50px; }";
-    html += "a { padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; }";
-    html += "</style></head><body>";
-    html += "<h1>Konfiguration gespeichert!</h1>";
-    html += "<p>Die Lampe muss neu gestartet werden, um die Änderungen zu übernehmen.</p>";
-    html += "<a href='/reboot'>Jetzt Neustarten</a>";
-    html += "</body></html>";
+    String html = R"rawliteral(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gespeichert!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; text-align: center; padding-top: 50px; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #28a745; }
+        p { font-size: 1.1em; margin-bottom: 30px; }
+        a { padding: 12px 25px; background-color: #007bff; color: white; text-decoration: none; border-radius: 6px; font-size: 1.1em; transition: background-color 0.3s; }
+        a:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Konfiguration gespeichert!</h1>
+        <p>Die Lampe wird jetzt neu gestartet, um die Änderungen zu übernehmen.</p>
+        <p style="font-size:0.9em; color:#666;">Dieser Tab kann in wenigen Sekunden geschlossen werden.</p>
+        <a href='/'>Zurück zur Konfiguration</a>
+    </div>
+    <script>
+        setTimeout(function(){ 
+            // Send request to reboot, but don't wait for response.
+            // This gives the server a moment to send this page's response.
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/reboot', true);
+            xhr.send();
+            
+            // Visually indicate the restart is happening
+            document.querySelector('h1').innerText = "Neustart...";
+            document.querySelector('p').innerText = "Bitte warten, die Lampe verbindet sich gleich mit dem neuen Netzwerk.";
+            document.querySelector('a').style.display = 'none';
+        }, 2000);
+    </script>
+</body>
+</html>
+)rawliteral";
     request->send(200, "text/html", html);
   });
 
   // Endpunkt für den Neustart
   server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(200, "text/plain", "Neustart wird ausgeführt...");
-    delay(1000);
+    delay(500);
     ESP.restart();
   });
 
+  server.onNotFound([](AsyncWebServerRequest *request){
+    // Handle Captive Portal
+    // When a device connects to the AP, it might try to check for internet connectivity.
+    // This request (e.g., to "http://connectivitycheck.gstatic.com/generate_204") should be
+    // redirected to our configuration page.
+    if (request->host() != WiFi.softAPIP().toString()) {
+        request->redirect("http://" + WiFi.softAPIP().toString());
+    } else {
+        request->send(404, "text/plain", "Not found");
+    }
+  });
+
+
   server.begin();
-  Serial.println("Webserver gestartet. Öffne http://" + WiFi.localIP().toString() + " im Browser, um die Lampe zu konfigurieren.");
+  if (WiFi.getMode() == WIFI_AP) {
+    Serial.println("Webserver im AP-Modus gestartet. Verbinde dich mit dem 'Freundschaftslampe-Setup' WLAN.");
+  } else {
+    Serial.println("Webserver gestartet. Öffne http://" + WiFi.localIP().toString() + " im Browser, um die Lampe zu konfigurieren.");
+  }
 }
 
 void setupMqtt() {
@@ -367,6 +600,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   Serial.println(message);
 
   if (strcmp(topic, config.mqttTopic) == 0) {
+    // Prüfen, ob der Ruhemodus aktiv ist
+    if (isQuietTime()) {
+      Serial.println("Ruhezeit ist aktiv. Empfangene Farbe wird ignoriert.");
+      return;
+    }
+
     // RGB-Werte aus dem Payload extrahieren
     char* rgbString = (char*)payload;
     char* r_str = strtok(rgbString, ",");
@@ -492,52 +731,93 @@ void handleReceivedColorMode() {
 
 
 void handleTouch() {
-  if (inReceivedColorMode) return; // Deaktiviert, wenn eine empfangene Farbe angezeigt wird
+  if (inReceivedColorMode) return;
 
   int touchValue = touchRead(TOUCH_PIN);
   unsigned long currentTime = millis();
 
-  if (touchValue < TOUCH_THRESHOLD && (currentTime - lastTouchTime) > TOUCH_DEBOUNCE_DELAY) {
-    lastTouchTime = currentTime;
-    isLampOn = !isLampOn; // Zustand umschalten
+  if (touchValue < TOUCH_THRESHOLD) {
+      // ========== PIN IS TOUCHED ==========
+      if (touchState == IDLE) {
+          // Touch just started
+          touchState = TOUCH_DETECTED;
+          touchStartTime = currentTime;
+      }
 
-    if (isLampOn) {
-      Serial.println("Lampe eingeschaltet.");
-      setAllPixels(currentColor);
-    } else {
-      Serial.println("Lampe ausgeschaltet.");
-      setAllPixels(pixels.Color(0, 0, 0)); // Ausschalten
-    }
+      // Check if touch becomes a long touch
+      if (touchState == TOUCH_DETECTED && (currentTime - touchStartTime) >= 1000) {
+          touchState = LONG_TOUCH_ACTIVE;
+          Serial.println("Langer Druck erkannt. Helligkeitsänderung startet.");
+          // On first detection of long press, if lamp is off, turn it on.
+          if (!isLampOn) {
+              isLampOn = true;
+              // Set brightness to a minimum value if it's 0 to make it visible
+              if (currentBrightness == 0) currentBrightness = 10;
+              setAllPixels(currentColor);
+          }
+      }
+
+      // If in long touch, adjust brightness
+      if (touchState == LONG_TOUCH_ACTIVE) {
+          if (millis() - lastBrightnessAnimTime > BRIGHTNESS_ANIM_DELAY) {
+              lastBrightnessAnimTime = millis();
+
+              int nextBrightness = currentBrightness + brightnessDirection;
+
+              if (nextBrightness <= 10) { // Set a minimum brightness to not turn it off
+                  nextBrightness = 10;
+                  brightnessDirection = 1; // Change direction to brighter
+              } else if (nextBrightness >= 255) {
+                  nextBrightness = 255;
+                  brightnessDirection = -1; // Change direction to darker
+              }
+              currentBrightness = (uint8_t)nextBrightness;
+              setAllPixels(currentColor); // Update pixels with new brightness
+          }
+      }
+
+  } else {
+      // ========== PIN IS RELEASED ==========
+      if (touchState == TOUCH_DETECTED) {
+          // This was a short touch
+          isLampOn = !isLampOn;
+          if (isLampOn) {
+              Serial.println("Lampe eingeschaltet (kurzer Druck).");
+              // if brightness was 0, set to a default value
+              if (currentBrightness == 0) currentBrightness = 255;
+              setAllPixels(currentColor);
+
+          } else {
+              Serial.println("Lampe ausgeschaltet (kurzer Druck).");
+              setAllPixels(pixels.Color(0, 0, 0));
+          }
+      } else if (touchState == LONG_TOUCH_ACTIVE) {
+          // Long touch was released, brightness is already set.
+          Serial.println("Helligkeitsänderung beendet.");
+      }
+      
+      // Reset state for next touch
+      touchState = IDLE;
   }
 }
 
-void handleBrightnessTouch() {
-  if (inReceivedColorMode || !isLampOn) return; // Nicht ausführen, wenn Farbe empfangen wird oder Lampe aus ist
-
-  int touchValue = touchRead(BRIGHTNESS_TOUCH_PIN);
-
-  if (touchValue < BRIGHTNESS_TOUCH_THRESHOLD) {
-    // Pin wird berührt -> Animation ausführen
-    if (millis() - lastBrightnessAnimTime > BRIGHTNESS_ANIM_DELAY) {
-      lastBrightnessAnimTime = millis();
-
-      // Helligkeit anpassen
-      int nextBrightness = currentBrightness + brightnessDirection;
-
-      // Grenzen prüfen und Richtung umkehren
-      if (nextBrightness <= 0) {
-        nextBrightness = 0;
-        brightnessDirection = 1; // Richtung auf "heller" ändern
-      } else if (nextBrightness >= 255) {
-        nextBrightness = 255;
-        brightnessDirection = -1; // Richtung auf "dunkler" ändern
-      }
-
-      currentBrightness = (uint8_t)nextBrightness;
-
-      // Die Farbe mit der neuen Helligkeit sofort anzeigen
-      setAllPixels(currentColor);
-    }
+bool isQuietTime() {
+  if (!config.quietModeEnabled) return false;
+  
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Fehler: Konnte aktuelle Zeit nicht abrufen.");
+    return false; // Ohne korrekte Uhrzeit lassen wir die Nachrichten sicherheitshalber durch
+  }
+  
+  int currentHour = timeinfo.tm_hour;
+  
+  if (config.quietHourStart < config.quietHourEnd) {
+    // Zeitraum liegt am selben Tag (z.B. 10 bis 14 Uhr)
+    return (currentHour >= config.quietHourStart && currentHour < config.quietHourEnd);
+  } else {
+    // Zeitraum geht über Mitternacht (z.B. 22 bis 6 Uhr)
+    return (currentHour >= config.quietHourStart || currentHour < config.quietHourEnd);
   }
 }
 
@@ -556,6 +836,9 @@ void loadConfiguration() {
   preferences.getString("mqttUser", config.mqttUser, sizeof(config.mqttUser));
   preferences.getString("mqttPassword", config.mqttPassword, sizeof(config.mqttPassword));
   config.identityColor = preferences.getUInt("identityColor", 0x0000FF); // Standard: Blau
+  config.quietModeEnabled = preferences.getBool("quietEnabled", false);
+  config.quietHourStart = preferences.getUChar("quietStart", 22);
+  config.quietHourEnd = preferences.getUChar("quietEnd", 6);
   preferences.end();
 
   Serial.println("Konfiguration geladen:");
@@ -580,6 +863,9 @@ void saveConfiguration() {
   preferences.putString("mqttUser", config.mqttUser);
   preferences.putString("mqttPassword", config.mqttPassword);
   preferences.putUInt("identityColor", config.identityColor);
+  preferences.putBool("quietEnabled", config.quietModeEnabled);
+  preferences.putUChar("quietStart", config.quietHourStart);
+  preferences.putUChar("quietEnd", config.quietHourEnd);
   preferences.end();
 
   Serial.println("Konfiguration wurde gespeichert.");
