@@ -42,6 +42,55 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
     *   Wähle deine persönliche "Identitätsfarbe". Diese Farbe wird gesendet, wenn du den Taster drückst.
 4.  **Neustart**: Speichere die Konfiguration und starte die Lampe neu. Sie sollte sich nun mit deinem WLAN und dem MQTT-Broker verbinden.
 
+---
+
+# Friendship Lamp (English)
+
+This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT. When you touch one lamp, all other connected lamps light up in the same color.
+
+## Functionality
+
+*   **Web-based Configuration**: After the initial startup, the lamp creates its own Access Point (AP) named "Freundschaftslampe-Setup". Connect to this Wi-Fi network to configure the lamp.
+*   **Wi-Fi & MQTT Configuration**: The web interface allows you to enter credentials for your home Wi-Fi and the details for the MQTT broker (Server, Port, TLS, Topic, User, Password), as well as a CA certificate for TLS connections.
+*   **Color Selection**: During normal operation, the lamp's color can be freely chosen using a potentiometer.
+*   **Power On/Off**: The lamp can be turned on and off by touching a capacitive touch sensor.
+*   **Brightness Control**: The lamp's brightness can be adjusted by touching another capacitive touch sensor.
+*   **Send Friendship Signal**: By pressing a button, the currently set "identity color" is sent via MQTT to all other lamps.
+*   **Receive Friendship Signal**: If the lamp receives a color via MQTT, it will display this color for a set duration before reverting to its previous state.
+
+## Hardware
+
+*   ESP32 Dev Kit C
+*   Adafruit NeoPixel Ring (16 LEDs)
+*   Potentiometer
+*   Push Button
+*   Capacitive Touch Sensors (can be simple wires or metal surfaces)
+
+## Wiring
+
+| Component           | Pin on ESP32 |
+| ------------------- | ------------ |
+| Potentiometer (Signal)| GPIO 34      |
+| Push Button         | GPIO 4       |
+| NeoPixel Ring (DIN) | GPIO 13      |
+| Touch Sensor (On/Off) | GPIO 32      |
+| Touch Sensor (Brightness)| GPIO 27      |
+
+**Important Note:** Most ESP32 development boards have pins that can only be used as inputs (e.g., GPIO 34-39). GPIO 34 is one such pin and is well-suited for the potentiometer.
+
+## Setup
+
+1.  **Flash Firmware**: Compile and upload the firmware to the ESP32 using PlatformIO.
+2.  **Configuration Mode**: After the initial startup or if no Wi-Fi credentials are saved, the lamp starts in Access Point mode.
+    *   Look for a Wi-Fi network with the SSID "Freundschaftslampe-Setup" and connect to it.
+    *   Upon connecting, a captive portal with the configuration page usually opens automatically. If not, open a browser and go to any website (e.g., `http://192.168.4.1`).
+3.  **Configuration**: Enter your Wi-Fi credentials and your MQTT broker details on the web page.
+    *   If your MQTT broker uses TLS, check the corresponding box and optionally paste your broker's CA certificate.
+    *   Choose your personal "identity color". This color is sent when you press the button.
+4.  **Restart**: Save the configuration and restart the lamp. It should now connect to your Wi-Fi and the MQTT broker.
+
+---
+
 # User Manual: Friendship Lamp
 
 Welcome to your new **Friendship Lamp**! This lamp allows you to stay connected with your loved ones over long distances by sending each other colorful light greetings.
@@ -96,4 +145,3 @@ To ensure you aren't awakened at night by unexpectedly lighting up greetings, th
 - You can enable the **Quiet Mode** (Ruhemodus) on the lamp's Wi-Fi setup page (see Step 1).
 - Simply set a **Start Time** (e.g., 22:00 / 10 PM) and an **End Time** (e.g., 06:00 / 6 AM).
 - During this period, incoming greetings are **ignored** by the lamp. The lamp will not light up.
-
