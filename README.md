@@ -8,7 +8,7 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 *   **WLAN & MQTT-Konfiguration**: Über die Weboberfläche können die Zugangsdaten für das heimische WLAN sowie die Daten für den MQTT-Broker (Server, Port, TLS, Topic, Benutzer, Passwort) und ein CA-Zertifikat für TLS-Verbindungen hinterlegt werden.
 *   **Farbauswahl**: Die Farbe der Lampe kann im Normalbetrieb über ein Potentiometer frei gewählt werden.
 *   **Ein-/Ausschalten**: Die Lampe kann durch Berühren eines kapazitiven Touch-Sensors ein- und ausgeschaltet werden.
-*   **Helligkeitssteuerung**: Die Helligkeit der Lampe kann durch Berühren eines weiteren kapazitiven Touch-Sensors eingestellt werden.
+*   **Helligkeitssteuerung**: Die Helligkeit der Lampe kann durch langes Berühren des Ein/Ausschalters eingestellt werden.
 *   **Freundschaftssignal Senden**: Durch Drücken eines Tasters wird die aktuell eingestellte "Identitätsfarbe" über MQTT an alle anderen Lampen gesendet.
 *   **Freundschaftssignal Empfangen**: Empfängt die Lampe eine Farbe über MQTT, wird diese für eine bestimmte Zeit angezeigt, bevor die Lampe wieder in ihren vorherigen Zustand zurückkehrt.
 
@@ -27,8 +27,7 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 | Potentiometer (Signal) | GPIO 34      |
 | Taster              | GPIO 4       |
 | NeoPixel Ring (DIN) | GPIO 13      |
-| Touch-Sensor (Ein/Aus) | GPIO 32      |
-| Touch-Sensor (Helligkeit) | GPIO 27      |
+| Touch-Sensor (Ein/Aus/Helligkeit) | GPIO 32      |
 
 **Wichtiger Hinweis:** Die meisten ESP32-Entwicklungsboards haben Pins, die nur als Eingänge verwendet werden können (z.B. GPIO 34-39). GPIO 34 ist ein solcher Pin und eignet sich gut für das Potentiometer.
 
