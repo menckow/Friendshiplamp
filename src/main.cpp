@@ -17,7 +17,7 @@
 #define TOUCH_PIN 32          // Kapazitiver Touch-Pin (GPIO9)
 
 // -- NeoPixel-Einstellungen --
-#define NUM_PIXELS 16         // Anzahl der LEDs im Ring
+#define NUM_PIXELS 40         // Anzahl der LEDs im Ring
 
 // -- Touch-Einstellungen --
 #define TOUCH_THRESHOLD 40    // Schwellenwert für die Berührungserkennung
