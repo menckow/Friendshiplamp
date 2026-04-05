@@ -1,5 +1,5 @@
 # Friendshiplamp
-![Freundschaftslampe] (https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033.png)
+![Freundschaftslampe](https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033~2.png)
 Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit anderen Lampen verbunden ist. Berührt man eine Lampe, leuchten alle anderen Lampen in der gleichen Farbe auf.
 
 ## Funktionalität
