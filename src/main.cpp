@@ -270,6 +270,7 @@ uint32_t hexToColor(const char* hexStr) {
 }
 
 bool checkAuth(AsyncWebServerRequest *request) {
+    if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) return true; // Captive Portal ist bereits durch WPA2-Passwort gesichert
     if (strlen(config.adminPassword) > 0 && strcmp(config.adminPassword, "none") != 0) {
         if (!request->authenticate("admin", config.adminPassword)) {
             request->requestAuthentication();
@@ -283,7 +284,9 @@ void setupWebServer() {
   // Konfigurationsseite unter der Haupt-URL "/"
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     if (!checkAuth(request)) return;
-    String html = R"rawliteral(
+    String html;
+    html.reserve(10000);
+    html += R"rawliteral(
 <!DOCTYPE html>
 <html>
 <head>
@@ -487,10 +490,6 @@ void setupWebServer() {
     </form>
   </div>
   <script>
-    // This script will be populated with the current config values
-  </script>
-</body>
-</html>
 )rawliteral";
 
     // --- Dynamische Werte einfügen ---
@@ -514,7 +513,12 @@ void setupWebServer() {
     script += "document.getElementById('quiet_start').value = '" + String(config.quietHourStart) + "';\n";
     script += "document.getElementById('quiet_end').value = '" + String(config.quietHourEnd) + "';\n";
 
-    html.replace("<script>\n    // This script will be populated with the current config values\n  </script>", "<script>\n" + script + "</script>");
+    html += script;
+    html += R"rawliteral(
+  </script>
+</body>
+</html>
+)rawliteral";
     
     request->send(200, "text/html", html);
   });
