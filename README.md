@@ -5,7 +5,10 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 ## Funktionalität
 
 *   **Web-basierte Konfiguration**: Nach dem ersten Start spannt die Lampe einen eigenen Access-Point (AP) mit dem Namen "Freundschaftslampe-Setup" auf. Verbinde dich mit diesem WLAN, um die Lampe zu konfigurieren.
+*   **Sicheres Webinterface**: Die Weboberfläche ist mit einem Passwort geschützt (Standard: `12345678`).
 *   **WLAN & MQTT-Konfiguration**: Über die Weboberfläche können die Zugangsdaten für das heimische WLAN sowie die Daten für den MQTT-Broker (Server, Port, TLS, Topic, Benutzer, Passwort) und ein CA-Zertifikat für TLS-Verbindungen hinterlegt werden.
+*   **Dynamische LED-Anzahl**: Die exakte Anzahl der verlöteten NeoPixel lässt sich direkt über das Webinterface einstellen, ohne den Code neu zu flashen.
+*   **Optimierte Kommunikation**: Der Datenaustausch erfolgt ressourcenschonend per JSON-Payload inkl. intelligentem, asynchronem Reconnect bei Verbindungsabbruch.
 *   **Farbauswahl**: Die Farbe der Lampe kann im Normalbetrieb über ein Potentiometer frei gewählt werden.
 *   **Ein-/Ausschalten**: Die Lampe kann durch Berühren eines kapazitiven Touch-Sensors ein- und ausgeschaltet werden.
 *   **Helligkeitssteuerung**: Die Helligkeit der Lampe kann durch langes Berühren des Ein/Ausschalters eingestellt werden.
@@ -50,8 +53,12 @@ This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT.
 
 ## Functionality
 
-*   **Web-based Configuration**: After the initial startup, the lamp creates its own Access Point (AP) named "Freundschaftslampe-Setup". Connect to this Wi-Fi network to configure the lamp.
+*   **Web-based Configuration**: After the initial startup, the lamp creates its own Access Point (AP) named "Freundschaftslampe-Setup" (Default password: `12345678`). Connect to this Wi-Fi network to configure the lamp.
+*   **Secure Web-UI**: The configuration portal is protected by a login page (Default password: `12345678`).
+*   **Secure Web-UI**: The configuration portal is protected by a login password (Default: `12345678`).
 *   **Wi-Fi & MQTT Configuration**: The web interface allows you to enter credentials for your home Wi-Fi and the details for the MQTT broker (Server, Port, TLS, Topic, User, Password), as well as a CA certificate for TLS connections.
+*   **Dynamic LED Count**: The number of NeoPixel LEDs can be easily adjusted via the web interface without having to recompile the code.
+*   **Dynamic LED Count**: The number of NeoPixel LEDs can be easily adjusted via the web interface without having to recompile the code.
 *   **Color Selection**: During normal operation, the lamp's color can be freely chosen using a potentiometer.
 *   **Power On/Off**: The lamp can be turned on and off by touching a capacitive touch sensor.
 *   **Brightness Control**: The lamp's brightness can be adjusted by touching another capacitive touch sensor.
@@ -104,8 +111,8 @@ Here is how you set up and operate your lamp.
 For the lamp to send and receive greetings, it needs to be connected to your Wi-Fi network.
 
 1. **Recognizing Setup Mode:** If the lamp **lights up purple** when turned on, it couldn't find an existing Wi-Fi connection. It is now in setup mode (Access Point mode).
-2. **Connecting to the Lamp:** Use a smartphone, tablet, or laptop and search for available Wi-Fi networks in your area. Connect to the network named **"Freundschaftslampe-Setup"**.
-3. **Opening the Configuration Page:** Usually, a page opens automatically (the so-called Captive Portal). If this doesn't happen, simply open your web browser and enter any web address. You will now be redirected to the lamp's settings page.
+2. **Connecting to the Lamp:** Use a smartphone, tablet, or laptop and search for available Wi-Fi networks in your area. Connect to the network named **"Freundschaftslampe-Setup"**. You will be asked for a Wi-Fi password. Enter the default password **`12345678`**.
+3. **Opening the Configuration Page:** Usually, a page opens automatically (the so-called Captive Portal). If this doesn't happen, simply open your web browser and enter any web address. You will now be redirected to the lamp's settings page. Log in with the standard password **`12345678`**.
 4. **Entering Data:**
    - Under **WLAN-Einstellungen** (Wi-Fi Settings), enter the name (SSID) and password of your **home Wi-Fi**.
    - Under **MQTT-Einstellungen** (MQTT Settings), enter the connection details for the communication server (broker).
