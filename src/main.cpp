@@ -8,6 +8,7 @@
 #include <Preferences.h>
 #include <DNSServer.h>
 #include <time.h>
+#include <ArduinoJson.h>
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
@@ -42,6 +43,9 @@ struct Config {
   bool quietModeEnabled;
   uint8_t quietHourStart;
   uint8_t quietHourEnd;
+  char adminPassword[64];
+  char mqttClientId[64];
+  uint16_t numPixels;
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -62,6 +66,12 @@ uint8_t currentBrightness = 255;
 int buttonState;
 int lastButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
+
+volatile bool buttonPressedFlag = false;
+volatile unsigned long lastInterruptTime = 0;
+unsigned long lastMqttReconnectAttempt = 0;
+unsigned long lastWifiReconnectAttempt = 0;
+const unsigned long RECONNECT_INTERVAL = 5000;
 
 // -- Helligkeits-Animation --
 int brightnessDirection = -1; // -1 für dunkler, 1 für heller
@@ -96,7 +106,7 @@ void handlePotentiometer();
 void handleTouch();
 void handleBrightnessTouch();
 void handleReceivedColorMode();
-uint32_t hexToColor(String hex);
+uint32_t hexToColor(const char* hexStr);
 void startNormalMode();
 void startApMode();
 bool isQuietTime();
@@ -132,11 +142,22 @@ void loop() {
 
   // Nur im normalen Modus MQTT und Hardware-Interaktionen ausführen
   if (WiFi.getMode() == WIFI_STA) {
-    // MQTT-Verbindung aufrechterhalten
-    if (!client.connected()) {
-      reconnectMqtt();
+    if (WiFi.status() != WL_CONNECTED) {
+       if (millis() - lastWifiReconnectAttempt > RECONNECT_INTERVAL) {
+          lastWifiReconnectAttempt = millis();
+          Serial.println("WLAN Verbindung verloren. Versuche Reconnect...");
+          WiFi.reconnect();
+       }
+    } else {
+       if (!client.connected()) {
+          if (millis() - lastMqttReconnectAttempt > RECONNECT_INTERVAL) {
+             lastMqttReconnectAttempt = millis();
+             reconnectMqtt(); 
+          }
+       } else {
+          client.loop();
+       }
     }
-    client.loop();
 
     // Hardware abfragen
     handleButtonPress();
@@ -153,8 +174,18 @@ void loop() {
 
 // == Funktionsdefinitionen =================================================
 
+void IRAM_ATTR isr_button() {
+  unsigned long interruptTime = millis();
+  if (interruptTime - lastInterruptTime > DEBOUNCE_DELAY) {
+      buttonPressedFlag = true;
+  }
+  lastInterruptTime = interruptTime;
+}
+
 void initializeHardware() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), isr_button, FALLING);
+  pixels.updateLength(config.numPixels > 0 ? config.numPixels : NUM_PIXELS);
   pixels.begin();
   pixels.show(); // Pixel initial ausschalten
   Serial.println("Hardware initialisiert.");
@@ -184,8 +215,8 @@ void startApMode() {
   // Ring lila färben, um den AP-Modus anzuzeigen
   setAllPixels(pixels.Color(128, 0, 128));
 
-  // AP-Modus starten
-  WiFi.softAP(ap_ssid);
+  // AP-Modus starten mit Passwort
+  WiFi.softAP(ap_ssid, "12345678");
   
   // IP-Adresse des AP abrufen und ausgeben
   IPAddress apIP = WiFi.softAPIP();
@@ -230,17 +261,28 @@ bool setupWifi() {
 }
 
 // Hilfsfunktion, um einen Hex-String (z.B. "#RRGGBB") in eine 32-Bit-Farbe umzuwandeln
-uint32_t hexToColor(String hex) {
-  hex.toUpperCase();
-  if (hex.startsWith("#")) {
-    hex = hex.substring(1);
+uint32_t hexToColor(const char* hexStr) {
+  if (hexStr == nullptr) return 0;
+  if (hexStr[0] == '#') {
+    hexStr++;
   }
-  return (uint32_t) strtoul(hex.c_str(), NULL, 16);
+  return (uint32_t) strtoul(hexStr, NULL, 16);
+}
+
+bool checkAuth(AsyncWebServerRequest *request) {
+    if (strlen(config.adminPassword) > 0 && strcmp(config.adminPassword, "none") != 0) {
+        if (!request->authenticate("admin", config.adminPassword)) {
+            request->requestAuthentication();
+            return false;
+        }
+    }
+    return true;
 }
 
 void setupWebServer() {
   // Konfigurationsseite unter der Haupt-URL "/"
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
     String html = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -385,6 +427,11 @@ void setupWebServer() {
     <form action='/save' method='POST'>
       
       <fieldset>
+        <legend>Administrator</legend>
+        <label for='admin_pass'>Webinterface Passwort:</label>
+        <input type='password' id='admin_pass' name='admin_pass' value=''>
+      </fieldset>
+      <fieldset>
         <legend>WLAN-Einstellungen</legend>
         <label for='ssid'>WLAN SSID:</label>
         <input type='text' id='ssid' name='ssid' placeholder="z.B. MeinWLAN" value=''>
@@ -404,6 +451,8 @@ void setupWebServer() {
         </div>
         <label for='mqtt_ca'>CA Zertifikat (optional):</label>
         <textarea id='mqtt_ca' name='mqtt_ca' placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
+        <label for='mqtt_client_id'>MQTT Client ID:</label>
+        <input type='text' id='mqtt_client_id' name='mqtt_client_id' value=''>
         <label for='mqtt_topic'>MQTT Topic:</label>
         <input type='text' id='mqtt_topic' name='mqtt_topic' placeholder="z.B. freundschaft/farbe" value='freundschaft/farbe'>
         <label for='mqtt_user'>MQTT Benutzername (optional):</label>
@@ -414,6 +463,8 @@ void setupWebServer() {
       
       <fieldset>
         <legend>Lampen-Einstellungen</legend>
+        <label for='num_pixels'>Anzahl LEDs (NeoPixel Ring):</label>
+        <input type='number' id='num_pixels' name='num_pixels' min='1' max='255' value='40'>
         <label for='color'>Deine Identitätsfarbe:</label>
         <p class="help-text">Diese Farbe wird gesendet, wenn du den Knopf drückst.</p>
         <input type='color' id='color' name='color' value='#0000FF'>
@@ -444,6 +495,9 @@ void setupWebServer() {
 
     // --- Dynamische Werte einfügen ---
     String script;
+    script += "document.getElementById('admin_pass').value = '" + String(config.adminPassword) + "';\n";
+    script += "document.getElementById('mqtt_client_id').value = '" + String(config.mqttClientId) + "';\n";
+    script += "document.getElementById('num_pixels').value = '" + String(config.numPixels) + "';\n";
     script += "document.getElementById('ssid').value = '" + String(config.ssid) + "';\n";
     script += "document.getElementById('password').value = '" + String(config.password) + "';\n";
     script += "document.getElementById('mqtt').value = '" + String(config.mqttServer) + "';\n";
@@ -467,7 +521,10 @@ void setupWebServer() {
 
   // Endpunkt zum Speichern der Konfiguration
   server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (!checkAuth(request)) return;
     // Parameter auslesen
+    if (request->hasParam("admin_pass", true)) strlcpy(config.adminPassword, request->getParam("admin_pass", true)->value().c_str(), sizeof(config.adminPassword));
+    if (request->hasParam("mqtt_client_id", true)) strlcpy(config.mqttClientId, request->getParam("mqtt_client_id", true)->value().c_str(), sizeof(config.mqttClientId));
     if (request->hasParam("ssid", true)) strlcpy(config.ssid, request->getParam("ssid", true)->value().c_str(), sizeof(config.ssid));
     if (request->hasParam("password", true)) strlcpy(config.password, request->getParam("password", true)->value().c_str(), sizeof(config.password));
     if (request->hasParam("mqtt", true)) strlcpy(config.mqttServer, request->getParam("mqtt", true)->value().c_str(), sizeof(config.mqttServer));
@@ -478,11 +535,12 @@ void setupWebServer() {
     if (request->hasParam("mqtt_user", true)) strlcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str(), sizeof(config.mqttUser));
     if (request->hasParam("mqtt_pass", true)) strlcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str(), sizeof(config.mqttPassword));
     if (request->hasParam("color", true)) {
-      config.identityColor = hexToColor(request->getParam("color", true)->value());
+      config.identityColor = hexToColor(request->getParam("color", true)->value().c_str());
     }
     config.quietModeEnabled = request->hasParam("quiet_enabled", true);
     if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
     if (request->hasParam("quiet_end", true)) config.quietHourEnd = request->getParam("quiet_end", true)->value().toInt();
+    if (request->hasParam("num_pixels", true)) config.numPixels = request->getParam("num_pixels", true)->value().toInt();
 
     // Konfiguration speichern
     saveConfiguration();
@@ -533,6 +591,7 @@ void setupWebServer() {
 
   // Endpunkt für den Neustart
   server.on("/reboot", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
     request->send(200, "text/plain", "Neustart wird ausgeführt...");
     delay(500);
     ESP.restart();
@@ -576,45 +635,39 @@ void setupMqtt() {
 }
 
 void reconnectMqtt() {
-  // Loop bis die Verbindung wiederhergestellt ist
-  while (!client.connected()) {
-    Serial.print("Versuche, MQTT-Verbindung herzustellen...");
-    // Eindeutige Client-ID erstellen
-    String clientId = "Freundschaftslampe-";
-    clientId += String(random(0xffff), HEX);
-    
-    bool success;
-    // Prüfen, ob ein Benutzername für die Verbindung verwendet werden soll
-    if (strlen(config.mqttUser) > 0) {
-      Serial.printf("\n  -> Verbinde mit Benutzer: %s\n", config.mqttUser);
-      success = client.connect(clientId.c_str(), config.mqttUser, config.mqttPassword);
-    } else {
-      success = client.connect(clientId.c_str());
-    }
+  Serial.print("Versuche, MQTT-Verbindung herzustellen...");
+  String clientId = String(config.mqttClientId);
+  if(clientId.length() == 0) clientId = "Freundschaftslampe-" + String(random(0xffff), HEX);
+  
+  bool success;
+  // Prüfen, ob ein Benutzername für die Verbindung verwendet werden soll
+  if (strlen(config.mqttUser) > 0) {
+    Serial.printf("\n  -> Verbinde mit Benutzer: %s\n", config.mqttUser);
+    success = client.connect(clientId.c_str(), config.mqttUser, config.mqttPassword);
+  } else {
+    success = client.connect(clientId.c_str());
+  }
 
-    if (success) {
-      Serial.println("verbunden!");
-      // Topic für eingehende Farbnachrichten abonnieren
-      client.subscribe(config.mqttTopic);
-      Serial.printf("Topic '%s' abonniert.\n", config.mqttTopic);
-    } else {
-      Serial.print("Fehler, rc=");
-      Serial.print(client.state());
-      Serial.println(" Erneuter Versuch in 5 Sekunden");
-      delay(5000);
-    }
+  if (success) {
+    Serial.println("verbunden!");
+    // Topic für eingehende Farbnachrichten abonnieren
+    client.subscribe(config.mqttTopic);
+    Serial.printf("Topic '%s' abonniert.\n", config.mqttTopic);
+  } else {
+    Serial.print("Fehler, rc=");
+    Serial.print(client.state());
+    Serial.println(" Erneuter Versuch beim nächsten Durchlauf.");
   }
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  // Eingehende Nachricht zur Verarbeitung in einen String umwandeln
-  payload[length] = '\0'; // Null-Terminator hinzufügen
-  String message = (char*)payload;
+  // Payload nullterminieren für Serial Print und Fallbacks
+  payload[length] = '\0'; 
 
   Serial.print("Nachricht empfangen auf Topic: ");
   Serial.print(topic);
   Serial.print(", Nachricht: ");
-  Serial.println(message);
+  Serial.println((char*)payload);
 
   if (strcmp(topic, config.mqttTopic) == 0) {
     // Prüfen, ob der Ruhemodus aktiv ist
@@ -623,31 +676,52 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       return;
     }
 
-    // RGB-Werte aus dem Payload extrahieren
-    char* rgbString = (char*)payload;
-    char* r_str = strtok(rgbString, ",");
-    char* g_str = strtok(NULL, ",");
-    char* b_str = strtok(NULL, ",");
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload, length);
+    
+    if (!error) {
+      // Wir ignorieren die eigene client_id NICHT, damit der eigene Button triggert.
+      const char* senderId = doc["client_id"] | "";
+      const char* colorStr = doc["color"] | "";
+      
+      if (strlen(colorStr) > 0) {
+        uint32_t parsedColor = hexToColor(colorStr);
+        Serial.printf("Farbe empfangen (JSON): %s\n", colorStr);
 
-    if (r_str && g_str && b_str) {
-      uint8_t r = atoi(r_str);
-      uint8_t g = atoi(g_str);
-      uint8_t b = atoi(b_str);
+        preReceivedState_isLampOn = isLampOn;
+        preReceivedState_Color = currentColor;
 
-      Serial.printf("Farbe empfangen: R=%d, G=%d, B=%d\n", r, g, b);
+        inReceivedColorMode = true;
+        receivedColor = parsedColor;
+        long duration = doc["duration"] | RECEIVED_COLOR_DURATION;
+        receivedColorEndTime = millis() + duration;
 
-      // Aktuellen Zustand speichern, bevor er geändert wird
-      preReceivedState_isLampOn = isLampOn;
-      preReceivedState_Color = currentColor;
+        Serial.println("Starte Anzeige der empfangenen Farbe...");
+        setAllPixels(receivedColor);
+      }
+    } else {
+      // Fallback auf CSV 'R,G,B' Format
+      char* rgbString = (char*)payload;
+      char* r_str = strtok(rgbString, ",");
+      char* g_str = strtok(NULL, ",");
+      char* b_str = strtok(NULL, ",");
 
-      // Timer-Modus aktivieren
-      inReceivedColorMode = true;
-      receivedColor = pixels.Color(r, g, b);
-      receivedColorEndTime = millis() + RECEIVED_COLOR_DURATION;
+      if (r_str && g_str && b_str) {
+        uint8_t r = atoi(r_str);
+        uint8_t g = atoi(g_str);
+        uint8_t b = atoi(b_str);
 
-      // Lampe mit der empfangenen Farbe einschalten
-      Serial.println("Starte Anzeige der empfangenen Farbe...");
-      setAllPixels(receivedColor);
+        Serial.printf("Farbe empfangen (Fallback): R=%d, G=%d, B=%d\n", r, g, b);
+        preReceivedState_isLampOn = isLampOn;
+        preReceivedState_Color = currentColor;
+
+        inReceivedColorMode = true;
+        receivedColor = pixels.Color(r, g, b);
+        receivedColorEndTime = millis() + RECEIVED_COLOR_DURATION;
+
+        Serial.println("Starte Anzeige der empfangenen Farbe...");
+        setAllPixels(receivedColor);
+      }
     }
   }
 }
@@ -673,49 +747,39 @@ void setAllPixels(uint32_t color) {
 }
 
 void handleButtonPress() {
-  int reading = digitalRead(BUTTON_PIN);
+  if (buttonPressedFlag) {
+    buttonPressedFlag = false; // Reset flag
+    Serial.println("Taster wurde gedrückt! Sende Identitätsfarbe via MQTT...");
 
-  // Wenn sich der Zustand des Tasters geändert hat, starte den Entprell-Timer
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
+    JsonDocument doc;
+    String clientId = String(config.mqttClientId);
+    if(clientId.length() == 0) clientId = "Freundschaftslampe-" + String(random(0xffff), HEX);
+    doc["client_id"] = clientId;
+    
+    char hexColor[10];
+    sprintf(hexColor, "#%06X", config.identityColor);
+    doc["color"] = hexColor;
+    doc["effect"] = "fade";
+    doc["duration"] = 30000;
+    
+    String payloadStr;
+    serializeJson(doc, payloadStr);
+    
+    client.publish(config.mqttTopic, payloadStr.c_str());
+    Serial.printf("Identitätsfarbe auf Topic '%s' gesendet (JSON): %s\n", config.mqttTopic, payloadStr.c_str());
   }
-
-  if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
-    // Wenn sich der Zustand nach der Entprellzeit nicht geändert hat
-    if (reading != buttonState) {
-      buttonState = reading;
-
-      // Nur auf die fallende Flanke reagieren (Taster wurde gedrückt)
-      if (buttonState == LOW) {
-        Serial.println("Taster wurde gedrückt! Sende Identitätsfarbe via MQTT...");
-
-        // Eigene Identitätsfarbe in R,G,B-Komponenten zerlegen
-        uint8_t r = (config.identityColor >> 16) & 0xFF;
-        uint8_t g = (config.identityColor >> 8) & 0xFF;
-        uint8_t b = config.identityColor & 0xFF;
-
-        // Payload als "R,G,B" String erstellen
-        char payload[12];
-        sprintf(payload, "%d,%d,%d", r, g, b);
-
-        // Auf dem MQTT-Topic veröffentlichen
-        client.publish(config.mqttTopic, payload);
-        Serial.printf("Identitätsfarbe auf Topic '%s' gesendet: %s\n", config.mqttTopic, payload);
-      }
-    }
-  }
-
-  lastButtonState = reading;
 }
 
 void handlePotentiometer() {
   if (inReceivedColorMode) return; // Deaktiviert, wenn eine empfangene Farbe angezeigt wird
 
   if (isLampOn) {
-    int potValue = analogRead(POTENTIOMETER_PIN);
+    int rawValue = analogRead(POTENTIOMETER_PIN);
+    static float smoothedValue = rawValue; // initialisiert sich nur beim ersten Durchlauf
+    smoothedValue = (0.05 * rawValue) + (0.95 * smoothedValue); // 5% neuer Wert, 95% alter
     
     // Den 12-Bit-ADC-Wert (0-4095) auf den 16-Bit-Hue-Wert (0-65535) abbilden
-    uint16_t hue = map(potValue, 0, 4095, 0, 65535);
+    uint16_t hue = map((int)smoothedValue, 0, 4095, 0, 65535);
     
     // HSV in RGB umwandeln
     uint32_t newColor = pixels.gamma32(pixels.ColorHSV(hue));
@@ -856,6 +920,16 @@ void loadConfiguration() {
   config.quietModeEnabled = preferences.getBool("quietEnabled", false);
   config.quietHourStart = preferences.getUChar("quietStart", 22);
   config.quietHourEnd = preferences.getUChar("quietEnd", 6);
+  preferences.getString("adminPassword", config.adminPassword, sizeof(config.adminPassword));
+  if (strlen(config.adminPassword) == 0) {
+      strcpy(config.adminPassword, "12345678");
+  }
+  preferences.getString("mqttClientId", config.mqttClientId, sizeof(config.mqttClientId));
+  if (strlen(config.mqttClientId) == 0) {
+      String generated = "Freundschaftslampe-" + String(random(0xffff), HEX);
+      strcpy(config.mqttClientId, generated.c_str());
+  }
+  config.numPixels = preferences.getUShort("numPixels", NUM_PIXELS);
   preferences.end();
 
   Serial.println("Konfiguration geladen:");
@@ -883,6 +957,9 @@ void saveConfiguration() {
   preferences.putBool("quietEnabled", config.quietModeEnabled);
   preferences.putUChar("quietStart", config.quietHourStart);
   preferences.putUChar("quietEnd", config.quietHourEnd);
+  preferences.putString("adminPassword", config.adminPassword);
+  preferences.putString("mqttClientId", config.mqttClientId);
+  preferences.putUShort("numPixels", config.numPixels);
   preferences.end();
 
   Serial.println("Konfiguration wurde gespeichert.");
