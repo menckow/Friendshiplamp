@@ -54,14 +54,12 @@ This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT.
 ## Functionality
 
 *   **Web-based Configuration**: After the initial startup, the lamp creates its own Access Point (AP) named "Freundschaftslampe-Setup" (Default password: `12345678`). Connect to this Wi-Fi network to configure the lamp.
-*   **Secure Web-UI**: The configuration portal is protected by a login page (Default password: `12345678`).
 *   **Secure Web-UI**: The configuration portal is protected by a login password (Default: `12345678`).
 *   **Wi-Fi & MQTT Configuration**: The web interface allows you to enter credentials for your home Wi-Fi and the details for the MQTT broker (Server, Port, TLS, Topic, User, Password), as well as a CA certificate for TLS connections.
 *   **Dynamic LED Count**: The number of NeoPixel LEDs can be easily adjusted via the web interface without having to recompile the code.
-*   **Dynamic LED Count**: The number of NeoPixel LEDs can be easily adjusted via the web interface without having to recompile the code.
 *   **Color Selection**: During normal operation, the lamp's color can be freely chosen using a potentiometer.
 *   **Power On/Off**: The lamp can be turned on and off by touching a capacitive touch sensor.
-*   **Brightness Control**: The lamp's brightness can be adjusted by touching another capacitive touch sensor.
+*   **Brightness Control**: The lamp's brightness can be adjusted by touching the capacitive touch sensor.
 *   **Send Friendship Signal**: By pressing a button, the currently set "identity color" is sent via MQTT to all other lamps.
 *   **Receive Friendship Signal**: If the lamp receives a color via MQTT, it will display this color for a set duration before reverting to its previous state.
 
