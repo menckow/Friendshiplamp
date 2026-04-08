@@ -12,17 +12,16 @@
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
-#define POTENTIOMETER_PIN 34   // Pin für das Potentiometer (muss ein ADC-Pin sein) 1
+#define POTENTIOMETER_PIN 34   // Pin für das Potentiometer (muss ein ADC-Pin sein) 1 ESP32 34
 #define BUTTON_PIN 4          // Pin für den Taster
 #define NEOPIXEL_PIN 13        // Pin für den NeoPixel-Ring (geändert auf einen sichereren Pin)
-#define TOUCH_PIN 32          // Kapazitiver Touch-Pin (GPIO9)
+#define TOUCH_PIN 32          // Kapazitiver Touch-Pin (GPIO9) ESP32 32
 
 // -- NeoPixel-Einstellungen --
 #define NUM_PIXELS 40         // Anzahl der LEDs im Ring
 
 // -- Touch-Einstellungen --
 #define TOUCH_THRESHOLD 40    // Schwellenwert für die Berührungserkennung
-#define BRIGHTNESS_ANIM_DELAY 10 // Zeit in ms zwischen den Helligkeitsschritten
 #define BRIGHTNESS_ANIM_DELAY 10 // Zeit in ms zwischen den Helligkeitsschritten
 
 // -- Taster-Einstellungen --
@@ -46,6 +45,8 @@ struct Config {
   char adminPassword[64];
   char mqttClientId[64];
   uint16_t numPixels;
+  char effect[32];
+  uint32_t duration;
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -89,6 +90,9 @@ uint32_t receivedColor = 0;
 unsigned long receivedColorEndTime = 0;
 bool preReceivedState_isLampOn = false;
 uint32_t preReceivedState_Color = 0;
+char receivedEffect[32] = "fade";
+unsigned long lastEffectTime = 0;
+int effectStep = 0;
 
 
 // == Funktionsdeklarationen ===============================================
@@ -215,7 +219,8 @@ void startApMode() {
   // Ring lila färben, um den AP-Modus anzuzeigen
   setAllPixels(pixels.Color(128, 0, 128));
 
-  // AP-Modus starten mit Passwort
+  // AP-Modus starten mit Passwort (inklusive STA-Modus fürs Scannen von Netzwerken)
+  WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(ap_ssid, "12345678");
   
   // IP-Adresse des AP abrufen und ausgeben
@@ -340,7 +345,7 @@ void setupWebServer() {
       margin-top: 15px;
       margin-bottom: 5px;
     }
-    input[type='text'], input[type='password'], input[type='number'], textarea {
+    input[type='text'], input[type='password'], input[type='number'], textarea, select {
       padding: 12px;
       margin-top: 5px;
       background-color: #fff;
@@ -352,7 +357,7 @@ void setupWebServer() {
       box-sizing: border-box;
       transition: border-color 0.3s, box-shadow 0.3s;
     }
-    input:focus, textarea:focus {
+    input:focus, textarea:focus, select:focus {
         border-color: #007bff;
         box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
         outline: none;
@@ -436,7 +441,11 @@ void setupWebServer() {
       </fieldset>
       <fieldset>
         <legend>WLAN-Einstellungen</legend>
-        <label for='ssid'>WLAN SSID:</label>
+        <label for='ssid_select'>Verfügbare WLANs:</label>
+        <select id='ssid_select' onchange='if(this.value) document.getElementById("ssid").value = this.value;'>
+          <option value=''>Suche WLANs...</option>
+        </select>
+        <label for='ssid'>WLAN SSID (oder manuell eingeben):</label>
         <input type='text' id='ssid' name='ssid' placeholder="z.B. MeinWLAN" value=''>
         <label for='password'>WLAN Passwort:</label>
         <input type='password' id='password' name='password' value=''>
@@ -471,6 +480,18 @@ void setupWebServer() {
         <label for='color'>Deine Identitätsfarbe:</label>
         <p class="help-text">Diese Farbe wird gesendet, wenn du den Knopf drückst.</p>
         <input type='color' id='color' name='color' value='#0000FF'>
+        <label for='effect'>Lichteffekt (beim Senden):</label>
+        <select id='effect' name='effect'>
+          <option value='fade'>Fade (Standard)</option>
+          <option value='color_wipe'>Color Wipe</option>
+          <option value='theater_chase'>Theater Chase</option>
+          <option value='rainbow_cycle'>Rainbow Cycle</option>
+          <option value='breathe'>Breathe / Pulse</option>
+          <option value='fire'>Feuer-Effekt</option>
+          <option value='comet'>Komet / Scanner</option>
+        </select>
+        <label for='duration'>Anzeigedauer beim Empfangen (in Sekunden):</label>
+        <input type='number' id='duration' name='duration' min='1' max='3600' value='10'>
       </fieldset>
 
       <fieldset>
@@ -509,12 +530,51 @@ void setupWebServer() {
     char hexColor[8];
     sprintf(hexColor, "#%06X", config.identityColor);
     script += "document.getElementById('color').value = '" + String(hexColor) + "';\n";
+    script += "document.getElementById('effect').value = '" + String(config.effect) + "';\n";
+    script += "document.getElementById('duration').value = '" + String(config.duration / 1000) + "';\n";
     script += "document.getElementById('quiet_enabled').checked = " + String(config.quietModeEnabled ? "true" : "false") + ";\n";
     script += "document.getElementById('quiet_start').value = '" + String(config.quietHourStart) + "';\n";
     script += "document.getElementById('quiet_end').value = '" + String(config.quietHourEnd) + "';\n";
 
     html += script;
     html += R"rawliteral(
+    function scanWlan() {
+      fetch('/scan')
+        .then(response => {
+          if (response.status === 202) {
+            document.getElementById('ssid_select').innerHTML = '<option value="">Suche läuft...</option>';
+            setTimeout(scanWlan, 1500);
+            return null;
+          }
+          return response.json();
+        })
+        .then(networks => {
+          if (!networks) return;
+          let select = document.getElementById('ssid_select');
+          select.innerHTML = '<option value="">-- WLAN auswählen --</option>';
+          
+          // Dedupliziere SSIDs und sortiere nach Signalstärke
+          let uniqueNetworks = [];
+          let seen = new Set();
+          networks.sort((a, b) => b.rssi - a.rssi).forEach(net => {
+            if (net.ssid && !seen.has(net.ssid)) {
+              seen.add(net.ssid);
+              uniqueNetworks.push(net);
+            }
+          });
+          
+          uniqueNetworks.forEach(net => {
+            let opt = document.createElement('option');
+            opt.value = net.ssid;
+            opt.textContent = net.ssid + ' (' + net.rssi + ' dBm)';
+            select.appendChild(opt);
+          });
+        })
+        .catch(err => {
+          document.getElementById('ssid_select').innerHTML = '<option value="">Fehler beim Laden der WLANs</option>';
+        });
+    }
+    scanWlan();
   </script>
 </body>
 </html>
@@ -540,6 +600,12 @@ void setupWebServer() {
     if (request->hasParam("mqtt_pass", true)) strlcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str(), sizeof(config.mqttPassword));
     if (request->hasParam("color", true)) {
       config.identityColor = hexToColor(request->getParam("color", true)->value().c_str());
+    }
+    if (request->hasParam("effect", true)) {
+      strlcpy(config.effect, request->getParam("effect", true)->value().c_str(), sizeof(config.effect));
+    }
+    if (request->hasParam("duration", true)) {
+      config.duration = request->getParam("duration", true)->value().toInt() * 1000; // convert to ms
     }
     config.quietModeEnabled = request->hasParam("quiet_enabled", true);
     if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
@@ -599,6 +665,29 @@ void setupWebServer() {
     request->send(200, "text/plain", "Neustart wird ausgeführt...");
     delay(500);
     ESP.restart();
+  });
+
+  server.on("/scan", HTTP_GET, [](AsyncWebServerRequest *request){
+    if (!checkAuth(request)) return;
+    int16_t n = WiFi.scanComplete();
+    if(n == -2){
+      // Scan hasn't been started yet
+      WiFi.scanNetworks(true);
+      request->send(202, "text/plain", "Scanning...");
+    } else if(n == -1){
+      // Scan in progress
+      request->send(202, "text/plain", "Scanning...");
+    } else {
+      // Scan complete
+      String json = "[";
+      for (int i = 0; i < n; ++i) {
+        if (i > 0) json += ",";
+        json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+      }
+      json += "]";
+      WiFi.scanDelete(); // Clean up to allow a new scan later
+      request->send(200, "application/json", json);
+    }
   });
 
   server.onNotFound([](AsyncWebServerRequest *request){
@@ -692,6 +781,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         uint32_t parsedColor = hexToColor(colorStr);
         Serial.printf("Farbe empfangen (JSON): %s\n", colorStr);
 
+        const char* effectStr = doc["effect"] | "fade";
+        strlcpy(receivedEffect, effectStr, sizeof(receivedEffect));
+
         preReceivedState_isLampOn = isLampOn;
         preReceivedState_Color = currentColor;
 
@@ -701,7 +793,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         receivedColorEndTime = millis() + duration;
 
         Serial.println("Starte Anzeige der empfangenen Farbe...");
-        setAllPixels(receivedColor);
+        pixels.clear();
+        pixels.show();
+        effectStep = 0;
+        lastEffectTime = 0;
       }
     } else {
       // Fallback auf CSV 'R,G,B' Format
@@ -722,9 +817,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         inReceivedColorMode = true;
         receivedColor = pixels.Color(r, g, b);
         receivedColorEndTime = millis() + RECEIVED_COLOR_DURATION;
+        strlcpy(receivedEffect, "fade", sizeof(receivedEffect));
 
         Serial.println("Starte Anzeige der empfangenen Farbe...");
-        setAllPixels(receivedColor);
+        pixels.clear();
+        pixels.show();
+        effectStep = 0;
+        lastEffectTime = 0;
       }
     }
   }
@@ -763,11 +862,10 @@ void handleButtonPress() {
     char hexColor[10];
     sprintf(hexColor, "#%06X", config.identityColor);
     doc["color"] = hexColor;
-    doc["effect"] = "fade";
-    doc["duration"] = 30000;
-    
-    String payloadStr;
-    serializeJson(doc, payloadStr);
+    doc["effect"] = config.effect;
+    doc["duration"] = config.duration;
+
+    String payloadStr;    serializeJson(doc, payloadStr);
     
     client.publish(config.mqttTopic, payloadStr.c_str());
     Serial.printf("Identitätsfarbe auf Topic '%s' gesendet (JSON): %s\n", config.mqttTopic, payloadStr.c_str());
@@ -796,20 +894,118 @@ void handlePotentiometer() {
   }
 }
 
+void renderEffect() {
+  unsigned long now = millis();
+  if (strcmp(receivedEffect, "color_wipe") == 0) {
+    if (now - lastEffectTime > 50) {
+      lastEffectTime = now;
+      if (effectStep < config.numPixels) {
+        pixels.setPixelColor(effectStep, receivedColor);
+        pixels.show();
+        effectStep++;
+      }
+    }
+  } else if (strcmp(receivedEffect, "theater_chase") == 0) {
+    if (now - lastEffectTime > 100) {
+      lastEffectTime = now;
+      pixels.clear();
+      for (int i = 0; i < config.numPixels; i += 3) {
+        if (i + effectStep < config.numPixels) {
+          pixels.setPixelColor(i + effectStep, receivedColor);
+        }
+      }
+      pixels.show();
+      effectStep = (effectStep + 1) % 3;
+    }
+  } else if (strcmp(receivedEffect, "rainbow_cycle") == 0) {
+    if (now - lastEffectTime > 20) {
+      lastEffectTime = now;
+      for(int i=0; i<config.numPixels; i++) {
+        int pixelHue = effectStep + (i * 65536L / config.numPixels);
+        pixels.setPixelColor(i, pixels.gamma32(pixels.ColorHSV(pixelHue)));
+      }
+      pixels.show();
+      effectStep += 256;
+      if(effectStep >= 65536) effectStep = 0;
+    }
+  } else if (strcmp(receivedEffect, "breathe") == 0) {
+    if (now - lastEffectTime > 15) {
+      lastEffectTime = now;
+      float val = (exp(sin(effectStep/255.0*PI)) - 0.36787944)*108.0; 
+      // simple sine wave for breathe
+      uint8_t brightness = map(sin(effectStep * 0.05) * 127 + 128, 0, 255, 10, 255);
+      
+      uint8_t r = (receivedColor >> 16) & 0xFF;
+      uint8_t g = (receivedColor >> 8) & 0xFF;
+      uint8_t b = receivedColor & 0xFF;
+      
+      r = (r * brightness) / 255;
+      g = (g * brightness) / 255;
+      b = (b * brightness) / 255;
+      
+      for(int i=0; i<config.numPixels; i++) {
+        pixels.setPixelColor(i, pixels.Color(r, g, b));
+      }
+      pixels.show();
+      effectStep++;
+    }
+  } else if (strcmp(receivedEffect, "fire") == 0) {
+    if (now - lastEffectTime > 50) {
+      lastEffectTime = now;
+      for(int i=0; i<config.numPixels; i++) {
+        int r = 255;
+        int g = random(50, 150); // orange-yellow
+        int b = 0;
+        int flicker = random(0, 150);
+        r = max(0, r - flicker);
+        g = max(0, g - flicker);
+        pixels.setPixelColor(i, pixels.Color(r, g, b));
+      }
+      pixels.show();
+    }
+  } else if (strcmp(receivedEffect, "comet") == 0) {
+    if (now - lastEffectTime > 30) {
+      lastEffectTime = now;
+      // Fade all by a fraction
+      for(int i=0; i<config.numPixels; i++) {
+        uint32_t c = pixels.getPixelColor(i);
+        uint8_t r = ((c >> 16) & 0xFF) * 0.8;
+        uint8_t g = ((c >> 8) & 0xFF) * 0.8;
+        uint8_t b = (c & 0xFF) * 0.8;
+        pixels.setPixelColor(i, pixels.Color(r, g, b));
+      }
+      pixels.setPixelColor(effectStep, receivedColor);
+      pixels.show();
+      effectStep++;
+      if(effectStep >= config.numPixels) effectStep = 0;
+    }
+  } else {
+    // default (fade or unknown): static color
+    if (effectStep == 0) {
+      setAllPixels(receivedColor);
+      effectStep = 1; // Only render once to save CPU
+    }
+  }
+}
+
 void handleReceivedColorMode() {
-  if (inReceivedColorMode && millis() >= receivedColorEndTime) {
-    inReceivedColorMode = false; // Timer-Modus beenden
+  if (inReceivedColorMode) {
+    if (millis() >= receivedColorEndTime) {
+      inReceivedColorMode = false; // Timer-Modus beenden
 
-    // Vorherigen Zustand wiederherstellen
-    isLampOn = preReceivedState_isLampOn;
-    currentColor = preReceivedState_Color;
+      // Vorherigen Zustand wiederherstellen
+      isLampOn = preReceivedState_isLampOn;
+      currentColor = preReceivedState_Color;
 
-    Serial.println("Anzeige der empfangenen Farbe beendet. Kehre zum vorherigen Zustand zurück.");
+      Serial.println("Anzeige der empfangenen Farbe beendet. Kehre zum vorherigen Zustand zurück.");
 
-    if (isLampOn) {
-      setAllPixels(currentColor); // Zur Potentiometer-Farbe zurückkehren
+      if (isLampOn) {
+        setAllPixels(currentColor); // Zur Potentiometer-Farbe zurückkehren
+      } else {
+        setAllPixels(pixels.Color(0, 0, 0)); // Lampe wieder ausschalten
+      }
     } else {
-      setAllPixels(pixels.Color(0, 0, 0)); // Lampe wieder ausschalten
+      renderEffect();
     }
   }
 }
@@ -934,6 +1130,11 @@ void loadConfiguration() {
       strcpy(config.mqttClientId, generated.c_str());
   }
   config.numPixels = preferences.getUShort("numPixels", NUM_PIXELS);
+  preferences.getString("effect", config.effect, sizeof(config.effect));
+  if (strlen(config.effect) == 0) {
+    strcpy(config.effect, "fade");
+  }
+  config.duration = preferences.getUInt("duration", 10000);
   preferences.end();
 
   Serial.println("Konfiguration geladen:");
@@ -964,6 +1165,8 @@ void saveConfiguration() {
   preferences.putString("adminPassword", config.adminPassword);
   preferences.putString("mqttClientId", config.mqttClientId);
   preferences.putUShort("numPixels", config.numPixels);
+  preferences.putString("effect", config.effect);
+  preferences.putUInt("duration", config.duration);
   preferences.end();
 
   Serial.println("Konfiguration wurde gespeichert.");
