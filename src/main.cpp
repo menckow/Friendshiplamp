@@ -897,17 +897,17 @@ void handlePotentiometer() {
 void renderEffect() {
   unsigned long now = millis();
   
-  // Grundfarben extrahieren
+  // Grundfarben extrahieren (0-255)
   uint8_t baseR = (receivedColor >> 16) & 0xFF;
   uint8_t baseG = (receivedColor >> 8) & 0xFF;
   uint8_t baseB = receivedColor & 0xFF;
   
-  // Helligkeits-Skalierung vorbereiten (Faktor 0.0 - 1.0)
-  float brightnessFactor = currentBrightness / 255.0;
+  // Helligkeit berechnen (0.0 - 1.0)
+  float bFact = currentBrightness / 255.0;
 
-  // Debug-Ausgabe beim ersten Schritt des Effekts
+  // Debug-Ausgabe beim Start
   if (effectStep == 0) {
-    Serial.printf(">>> Effekt '%s' gestartet. Farbe: #%02X%02X%02X, Helligkeit: %d\n", 
+    Serial.printf(">>> Effekt '%s' aktiv. Basis: #%02X%02X%02X, Helligkeit: %d/255\n", 
                   receivedEffect, baseR, baseG, baseB, currentBrightness);
   }
 
@@ -915,8 +915,10 @@ void renderEffect() {
     if (now - lastEffectTime > 50) {
       lastEffectTime = now;
       if (effectStep < config.numPixels) {
-        uint32_t color = pixels.Color(baseR * brightnessFactor, baseG * brightnessFactor, baseB * brightnessFactor);
-        pixels.setPixelColor(effectStep, color);
+        uint8_t r = baseR * bFact;
+        uint8_t g = baseG * bFact;
+        uint8_t b = baseB * bFact;
+        pixels.setPixelColor(effectStep, pixels.gamma32(pixels.Color(r, g, b)));
         pixels.show();
         effectStep++;
       }
@@ -925,7 +927,10 @@ void renderEffect() {
     if (now - lastEffectTime > 100) {
       lastEffectTime = now;
       pixels.clear();
-      uint32_t color = pixels.Color(baseR * brightnessFactor, baseG * brightnessFactor, baseB * brightnessFactor);
+      uint8_t r = baseR * bFact;
+      uint8_t g = baseG * bFact;
+      uint8_t b = baseB * bFact;
+      uint32_t color = pixels.gamma32(pixels.Color(r, g, b));
       for (int i = 0; i < config.numPixels; i += 3) {
         if (i + effectStep < config.numPixels) {
           pixels.setPixelColor(i + effectStep, color);
@@ -940,10 +945,10 @@ void renderEffect() {
       for(int i=0; i<config.numPixels; i++) {
         int pixelHue = effectStep + (i * 65536L / config.numPixels);
         uint32_t c = pixels.gamma32(pixels.ColorHSV(pixelHue));
-        // Helligkeit auch auf Regenbogen anwenden
-        uint8_t r = ((c >> 16) & 0xFF) * brightnessFactor;
-        uint8_t g = ((c >> 8) & 0xFF) * brightnessFactor;
-        uint8_t b = (c & 0xFF) * brightnessFactor;
+        // Helligkeit auf den bereits korrigierten Regenbogen anwenden
+        uint8_t r = ((c >> 16) & 0xFF) * bFact;
+        uint8_t g = ((c >> 8) & 0xFF) * bFact;
+        uint8_t b = (c & 0xFF) * bFact;
         pixels.setPixelColor(i, pixels.Color(r, g, b));
       }
       pixels.show();
@@ -953,15 +958,13 @@ void renderEffect() {
   } else if (strcmp(receivedEffect, "breathe") == 0) {
     if (now - lastEffectTime > 15) {
       lastEffectTime = now;
-      // Breathe-Intensität (Sinus-Kurve)
       float pulse = (sin(effectStep * 0.05) * 127 + 128) / 255.0;
-      
-      uint8_t r = baseR * brightnessFactor * pulse;
-      uint8_t g = baseG * brightnessFactor * pulse;
-      uint8_t b = baseB * brightnessFactor * pulse;
-      
+      uint8_t r = baseR * bFact * pulse;
+      uint8_t g = baseG * bFact * pulse;
+      uint8_t b = baseB * bFact * pulse;
+      uint32_t color = pixels.gamma32(pixels.Color(r, g, b));
       for(int i=0; i<config.numPixels; i++) {
-        pixels.setPixelColor(i, pixels.Color(r, g, b));
+        pixels.setPixelColor(i, color);
       }
       pixels.show();
       effectStep++;
@@ -970,12 +973,11 @@ void renderEffect() {
     if (now - lastEffectTime > 50) {
       lastEffectTime = now;
       for(int i=0; i<config.numPixels; i++) {
-        // Helligkeits-Flicker kombiniert mit globaler Helligkeit
         float flicker = random(50, 255) / 255.0;
-        uint8_t r = baseR * brightnessFactor * flicker;
-        uint8_t g = baseG * brightnessFactor * flicker;
-        uint8_t b = baseB * brightnessFactor * flicker;
-        pixels.setPixelColor(i, pixels.Color(r, g, b));
+        uint8_t r = baseR * bFact * flicker;
+        uint8_t g = baseG * bFact * flicker;
+        uint8_t b = baseB * bFact * flicker;
+        pixels.setPixelColor(i, pixels.gamma32(pixels.Color(r, g, b)));
       }
       pixels.show();
       effectStep++;
@@ -990,15 +992,21 @@ void renderEffect() {
         uint8_t b = (c & 0xFF) * 0.8;
         pixels.setPixelColor(i, pixels.Color(r, g, b));
       }
-      uint32_t headColor = pixels.Color(baseR * brightnessFactor, baseG * brightnessFactor, baseB * brightnessFactor);
-      pixels.setPixelColor(effectStep % config.numPixels, headColor);
+      uint8_t r = baseR * bFact;
+      uint8_t g = baseG * bFact;
+      uint8_t b = baseB * bFact;
+      uint32_t head = pixels.gamma32(pixels.Color(r, g, b));
+      pixels.setPixelColor(effectStep % config.numPixels, head);
       pixels.show();
       effectStep++;
     }
   } else {
-    // default/fade: Statische Farbe mit Helligkeit
+    // default/fade: Statische Farbe mit Gamma und Helligkeit
     if (effectStep == 0) {
-      uint32_t color = pixels.Color(baseR * brightnessFactor, baseG * brightnessFactor, baseB * brightnessFactor);
+      uint8_t r = baseR * bFact;
+      uint8_t g = baseG * bFact;
+      uint8_t b = baseB * bFact;
+      uint32_t color = pixels.gamma32(pixels.Color(r, g, b));
       for(int i=0; i<config.numPixels; i++) {
         pixels.setPixelColor(i, color);
       }
