@@ -952,13 +952,18 @@ void renderEffect() {
   } else if (strcmp(receivedEffect, "fire") == 0) {
     if (now - lastEffectTime > 50) {
       lastEffectTime = now;
+      
+      uint8_t baseR = (receivedColor >> 16) & 0xFF;
+      uint8_t baseG = (receivedColor >> 8) & 0xFF;
+      uint8_t baseB = receivedColor & 0xFF;
+
       for(int i=0; i<config.numPixels; i++) {
-        int r = 255;
-        int g = random(50, 150); // orange-yellow
-        int b = 0;
-        int flicker = random(0, 150);
-        r = max(0, r - flicker);
-        g = max(0, g - flicker);
+        // Helligkeits-Flicker (50-255) anstatt feste Farben
+        int flicker = random(50, 255);
+        uint8_t r = (baseR * flicker) / 255;
+        uint8_t g = (baseG * flicker) / 255;
+        uint8_t b = (baseB * flicker) / 255;
+        
         pixels.setPixelColor(i, pixels.Color(r, g, b));
       }
       pixels.show();
