@@ -905,11 +905,7 @@ void renderEffect() {
   // Helligkeit berechnen (0.0 - 1.0)
   float bFact = currentBrightness / 255.0;
 
-  // Debug-Ausgabe beim Start
-  if (effectStep == 0) {
-    Serial.printf(">>> Effekt '%s' aktiv. Basis: #%02X%02X%02X, Helligkeit: %d/255\n", 
-                  receivedEffect, baseR, baseG, baseB, currentBrightness);
-  }
+
 
   if (strcmp(receivedEffect, "color_wipe") == 0) {
     if (now - lastEffectTime > 50) {
