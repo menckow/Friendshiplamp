@@ -938,10 +938,6 @@ void renderEffect() {
   
   float bFact = effectiveBrightness / 255.0;
 
-  if (effectStep == 0 && (now - lastEffectTime > 100)) {
-     Serial.printf(">>> Effekt '%s' aktiv. Farbe: #%06X, Helligkeit: %d\n", receivedEffect, receivedColor, effectiveBrightness);
-  }
-
   if (strcmp(receivedEffect, "color_wipe") == 0) {
     if (now - lastEffectTime > 50) {
       lastEffectTime = now;
