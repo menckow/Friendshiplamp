@@ -2,7 +2,8 @@
 ![Freundschaftslampe](https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033~2.png)
 Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit anderen Lampen verbunden ist. Drückt man den Knopf, leuchten alle anderen Lampen in der gleichen Farbe auf.
 
-## Neue Funktionen (V2.0)
+## Neue Funktionen (V2.1)
+*   **Sicheres OTA-Update**: Die Firmware kann nun "Over-the-Air" via MQTT aktualisiert werden. Der Download erfolgt sicher über HTTPS.
 *   **Erweiterte Lichteffekte**: Wähle aus verschiedenen Effekten wie *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Feuer-Effekt* und *Komet*.
 *   **Anzeigedauer**: Die Dauer, wie lange eine empfangene Farbe angezeigt wird, lässt sich nun im Webinterface einstellen.
 *   **WLAN-Scan**: Die Weboberfläche sucht jetzt automatisch nach verfügbaren WLANs in der Umgebung.
@@ -10,6 +11,8 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 
 ## Funktionalität
 
+*   **Versions-Reporting**: Die Lampe meldet ihre aktuelle Version beim Start via MQTT.
+*   **Rollback-Schutz**: Dank dualer Partitionierung kehrt der ESP32 bei einem fehlgeschlagenen Update automatisch zur letzten funktionierenden Version zurück.
 *   **Web-basierte Konfiguration**: Nach dem ersten Start spannt die Lampe einen eigenen Access-Point (AP) mit dem Namen "Freundschaftslampe-Setup" auf.
 *   **Sicheres Webinterface**: Die Weboberfläche ist mit einem Passwort geschützt (Standard: `12345678`).
 *   **WLAN & MQTT-Konfiguration**: Unterstützung für MQTT mit TLS/SSL und CA-Zertifikaten.
@@ -41,19 +44,23 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 
 This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT. When you send a signal, all connected lamps light up in your personal identity color.
 
-## New Features (V2.0)
+## New Features (V2.1)
+*   **Secure OTA Update**: Update your firmware over-the-air via MQTT. Downloads are handled securely via HTTPS.
+*   **Certificate Management**: Store root CA certificates for your update server (e.g., GitHub/GitLab) directly in the web interface.
 *   **Advanced Lighting Effects**: Choose from various effects including *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Fire Effect,* and *Comet*.
-*   **Custom Duration**: The display time for received colors is now configurable via the web interface.
-*   **Wi-Fi Scanning**: The setup portal now automatically scans for available local Wi-Fi networks.
-*   **Enhanced Color Accuracy**: Integrated Gamma correction ensures that colors (especially tricky ones like purple/violet) look vibrant and true-to-life on the LEDs.
+*   **Custom Duration**: The display time for received colors is now configurable.
+*   **Wi-Fi Scanning**: The setup portal automatically scans for available local Wi-Fi networks.
+*   **Enhanced Color Accuracy**: Integrated Gamma correction for vibrant and true-to-life colors.
 
 ## Functionality
 
+*   **Version Reporting**: The lamp reports its current version on startup via MQTT (`freundschaft/update/status`).
+*   **Rollback Protection**: Using dual partitions, the ESP32 automatically reverts to the previous working version if an update fails.
 *   **Web-based Configuration**: Captive portal for easy setup via the "Freundschaftslampe-Setup" Wi-Fi.
 *   **Secure Web-UI**: Password protected access (Default: `12345678`).
 *   **Wi-Fi & MQTT**: Full support for standard and secure (TLS) MQTT brokers.
 *   **Dynamic LED Count**: Configure the number of LEDs directly in the UI.
-*   **Brightness Control**: Adjustable via long-press on the touch sensor; settings are applied to all effects.
+*   **Brightness Control**: Adjustable via long-press on the touch sensor.
 *   **Quiet Mode**: Schedule "Do Not Disturb" hours for nighttime.
 
 ## Setup
