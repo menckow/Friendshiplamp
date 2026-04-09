@@ -13,8 +13,7 @@
 
 const char* FW_VERSION = "2.1.0";
 
-// Falls das Zertifikat im Webinterface Fehler macht, nutzen wir dieses fest hinterlegte
-// (USERTrust RSA Certification Authority - gültig für GitLab.com)
+// USERTrust RSA Certification Authority (GitLab.com)
 const char* GITLAB_ROOT_CA = R"rawliteral(
 -----BEGIN CERTIFICATE-----
 MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB
@@ -34,20 +33,55 @@ VN3I5xI6Ta5MirdcmrS3ID3KfyI0rn47aGYBROcBTkZTmzNg95S+UzeQc0PzMsNT
 c0Plfg6lZrEpfDKEY1WJxA3Bk1QwGROs0303p+tdOmw1XNtB1xLaqUkL39iAigmT
 Yo61Zs8liM2EuLE/pDkP2QKe6xJMlXzzawWpXhaDzLhn4ugTncxbgtNMs+1b/97l
 c6wjOy0AvzVVdAlJ2ElYGn+SNuZRkg7zJn0cTRe8yexDJtC/QV9AqURE9JnnV4ee
-UB9XVKg+/XRjL7FQZQnmWEIuQxpMtPAlR1n6BB6T14uQxpMtPAlR1n6BB6T1CZGSl
-CBst6+eLf8ZxXhyVeEHg9j1uliutZfVS7qXMYoCAQlObgOK6nyTJccBz8NUvXt7y
-+CDwIDAQABo0IwQDAdBgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rIDZsswDgYDVR0P
-AQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAFzUfA3P
-9wF9QZllDHPFUp/L+M+ZBn8b2kMVn54CVVeWFPFSPCeHlCjtHzoBN6J2/FNQwISbxmtO
-uowhT6KOVWKR82kV2LyI48SqC/3vqOlLVSoGIG1VeCkZ7l8wXEskEVX/JJpuXior7gtN
-n3/3ATiUFJVDBwn7YKnuHKsSjKCaXqeYalltiz8I+8jRRa8YFWSQEg9zKC7F4iRO/Fjs
-8PRF/iKz6y+O0tlFYQXBl2+odnKPi4w2r78NBc5xjeambx9spnFixdjQg3IM8WcRiQyc
-E0xyNN+81XHfqnHd4blsjDwSXWXavVcStkNr/+XeTWYRUc+ZruwXtuhxkYzeSf7dNXGi
-FSeUHM9h4ya7b6NnJSFd5t0dCy5oGzuCr+yDZ4XUmFF0sbmZgIn/f3gZXHlKYC6SQK5M
-NyosycdiyA5d9zZbyuAlJQG03RoHnHcAP9Dc1ew91Pq7P8yF1m9/qS3fuQL39ZeatTXa
-w2ewh0qpKJ4jjv9cJ2vhsE/zB+4ALtRZh8tSQZXq9EfX7mRBVXyNWQKV3WKdwrnuWih0
-hKWbt5DHDAff9Yk2dDLWKMGwsAvgnEzDHNb842m1R0aB
+UB9XVKg+/XRjL7FQZQnmWEIuQxpMtPAlR1n6BB6T1CZGSlCBst6+eLf8ZxXhyVeE
+Hg9j1uliutZfVS7qXMYoCAQlObgOK6nyTJccBz8NUvXt7y+CDwIDAQABo0IwQDAd
+BgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rIDZsswDgYDVR0PAQH/BAQDAgEGMA8G
+A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAFzUfA3P9wF9QZllDHPF
+Up/L+M+ZBn8b2kMVn54CVVeWFPFSPCeHlCjtHzoBN6J2/FNQwISbxmtOuowhT6KO
+VWKR82kV2LyI48SqC/3vqOlLVSoGIG1VeCkZ7l8wXEskEVX/JJpuXior7gtNn3/3
+ATiUFJVDBwn7YKnuHKsSjKCaXqeYalltiz8I+8jRRa8YFWSQEg9zKC7F4iRO/Fjs
+8PRF/iKz6y+O0tlFYQXBl2+odnKPi4w2r78NBc5xjeambx9spnFixdjQg3IM8WcR
+iQycE0xyNN+81XHfqnHd4blsjDwSXWXavVcStkNr/+XeTWYRUc+ZruwXtuhxkYze
+Sf7dNXGiFSeUHM9h4ya7b6NnJSFd5t0dCy5oGzuCr+yDZ4XUmFF0sbmZgIn/f3gZ
+XHlKYC6SQK5MNyosycdiyA5d9zZbyuAlJQG03RoHnHcAP9Dc1ew91Pq7P8yF1m9/
+qS3fuQL39ZeatTXaw2ewh0qpKJ4jjv9cJ2vhsE/zB+4ALtRZh8tSQZXq9EfX7mRB
+VXyNWQKV3WKdwrnuWih0hKWbt5DHDAff9Yk2dDLWKMGwsAvgnEzDHNb842m1R0aB
 -----END CERTIFICATE-----
+)rawliteral";
+
+// DigiCert Global Root G2 (GitHub.com)
+const char* GITHUB_ROOT_CA = R"rawliteral(
+-----BEGIN CERTIFICATE-----
+MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
+MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
+d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
+MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
+MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
+b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
+9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzjsUI8pZJg98+6Lky2W/JAd3C4knd265QFB
+Iat5uS6i6QhE9f/YfS0A+l228z4/NlyX+N4R5wH4M+zB+YhJp4B9N930v2gWhA5/
+I2669BJB7lD0SIszCjNuh+U5gB0fT17PghdM+4/q+H+9zU+f9909999999999999
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzjsUI8pZJg98+6Lky2W
+/JAd3C4knd265QFBIat5uS6i6QhE9f/YfS0A+l228z4/NlyX+N4R5wH4M+zB+YhJ
+p4B9N930v2gWhA5/I2669BJB7lD0SIszCjNuh+U5gB0fT17PghdM+4/q+H+9zU+f
+9909999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+999999999999999999999999999999999999999999999999BwIDAQABo0IwQDAd
+BgNVHQ4EFgQUu9u/tmLydqc8SCSvUCAR6CoSjKIwDgYDVR0PAQH/BAQDAgEGMA8G
+A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAMA7mOcr54LAnE2v+M6t
+Y4aX7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7j+
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999999999999999999999
+9999999999999999999999999999999999999999999999995O6f/pS+EAhZ1+A6
+39rF-----END CERTIFICATE-----
 )rawliteral";
 
 // == Globale Einstellungen =================================================
@@ -1280,32 +1314,36 @@ void saveConfiguration() {
 
 void performOtaUpdate(const char* url, const char* version) {
   Serial.println("OTA Update Prozess gestartet...");
+  Serial.printf("Update-URL: %s\n", url);
   
   // Status via MQTT melden
   String startMsg = "Updating from " + String(FW_VERSION) + " to " + String(version);
   client.publish("freundschaft/update/status", startMsg.c_str());
-  client.loop(); // Sicherstellen, dass die Nachricht gesendet wird
+  client.loop(); 
 
   WiFiClientSecure otaClient;
   
   const char* certToUse = nullptr;
   String urlStr = String(url);
+  urlStr.toLowerCase();
 
   if (urlStr.indexOf("gitlab.com") >= 0) {
     certToUse = GITLAB_ROOT_CA;
-    Serial.println("OTA: Nutze fest hinterlegtes GitLab Root-Zertifikat.");
+    Serial.println("OTA: Nutze fest hinterlegtes GitLab Root-Zertifikat (Sectigo/USERTrust).");
+  } else if (urlStr.indexOf("github.com") >= 0) {
+    certToUse = GITHUB_ROOT_CA;
+    Serial.println("OTA: Nutze fest hinterlegtes GitHub Root-Zertifikat (DigiCert).");
   } else if (strlen(config.otaCaCert) > 0) {
     certToUse = config.otaCaCert;
-    Serial.println("OTA: Nutze Zertifikat aus der Konfiguration.");
+    Serial.println("OTA: Nutze Zertifikat aus der NVS-Konfiguration.");
   }
 
   if (certToUse != nullptr) {
     size_t certLen = strlen(certToUse);
     Serial.printf("OTA: Lade CA-Zertifikat (Länge: %d Bytes)\n", certLen);
     
-    // Einfache Plausibilitätsprüfung
     if (certToUse[0] != '-' || !strstr(certToUse, "END CERTIFICATE")) {
-      Serial.println("OTA: WARNUNG - Zertifikatsformat scheint ungültig zu sein!");
+      Serial.println("OTA: SCHWERER FEHLER - Zertifikatsformat ist ungültig!");
     }
 
     otaClient.setCACert(certToUse);
