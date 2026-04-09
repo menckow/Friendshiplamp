@@ -61,9 +61,9 @@ PubSubClient client(espClient);
 DNSServer dnsServer;
 
 // == Globale Zustandsvariablen =============================================
-bool isLampOn = true;
+bool isLampOn = false;
 uint32_t currentColor = pixels.Color(255, 255, 255);
-uint8_t currentBrightness = 255;
+uint8_t currentBrightness = 100;
 int buttonState;
 int lastButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
