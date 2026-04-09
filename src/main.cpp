@@ -13,6 +13,43 @@
 
 const char* FW_VERSION = "2.1.0";
 
+// Falls das Zertifikat im Webinterface Fehler macht, nutzen wir dieses fest hinterlegte
+// (USERTrust RSA Certification Authority - gültig für GitLab.com)
+const char* GITLAB_ROOT_CA = R"rawliteral(
+-----BEGIN CERTIFICATE-----
+MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB
+iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
+cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV
+BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAw
+MjAxMDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNV
+BAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVU
+aGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBSU0EgQ2Vy
+dGlmaWNhdGlvbiBBdXRob3JpdHkwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK
+AoICAQCAEmUXNg7D2wiz0KxXDXbtzSfTTK1Qg2HiqiBNCS1kCdzOiZ/MPans9s/B
+3PHTsdZ7NygRK0faOca8Ohm0X6a9fZ2jY0K2dvKpOyuR+OJv0OwWIJAJPuLodMkY
+tJHUYmTbf6MG8YgYapAiPLz+E/CHFHv25B+O1ORRxhFnRghRy4YUVD+8M/5+bJz/
+Fp0YvVGONaanZshyZ9shZrHUm3gDwFA66Mzw3LyeTP6vBZY1H1dat//O+T23LLb2
+VN3I5xI6Ta5MirdcmrS3ID3KfyI0rn47aGYBROcBTkZTmzNg95S+UzeQc0PzMsNT
+79uq/nROacdrjGCT3sTHDN/hMq7MkztReJVni+49Vv4M0GkPGw/zJSZrM233bkf6
+c0Plfg6lZrEpfDKEY1WJxA3Bk1QwGROs0303p+tdOmw1XNtB1xLaqUkL39iAigmT
+Yo61Zs8liM2EuLE/pDkP2QKe6xJMlXzzawWpXhaDzLhn4ugTncxbgtNMs+1b/97l
+c6wjOy0AvzVVdAlJ2ElYGn+SNuZRkg7zJn0cTRe8yexDJtC/QV9AqURE9JnnV4ee
+UB9XVKg+/XRjL7FQZQnmWEIuQxpMtPAlR1n6BB6T14uQxpMtPAlR1n6BB6T1CZGSl
+CBst6+eLf8ZxXhyVeEHg9j1uliutZfVS7qXMYoCAQlObgOK6nyTJccBz8NUvXt7y
++CDwIDAQABo0IwQDAdBgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rIDZsswDgYDVR0P
+AQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAFzUfA3P
+9wF9QZllDHPFUp/L+M+ZBn8b2kMVn54CVVeWFPFSPCeHlCjtHzoBN6J2/FNQwISbxmtO
+uowhT6KOVWKR82kV2LyI48SqC/3vqOlLVSoGIG1VeCkZ7l8wXEskEVX/JJpuXior7gtN
+n3/3ATiUFJVDBwn7YKnuHKsSjKCaXqeYalltiz8I+8jRRa8YFWSQEg9zKC7F4iRO/Fjs
+8PRF/iKz6y+O0tlFYQXBl2+odnKPi4w2r78NBc5xjeambx9spnFixdjQg3IM8WcRiQyc
+E0xyNN+81XHfqnHd4blsjDwSXWXavVcStkNr/+XeTWYRUc+ZruwXtuhxkYzeSf7dNXGi
+FSeUHM9h4ya7b6NnJSFd5t0dCy5oGzuCr+yDZ4XUmFF0sbmZgIn/f3gZXHlKYC6SQK5M
+NyosycdiyA5d9zZbyuAlJQG03RoHnHcAP9Dc1ew91Pq7P8yF1m9/qS3fuQL39ZeatTXa
+w2ewh0qpKJ4jjv9cJ2vhsE/zB+4ALtRZh8tSQZXq9EfX7mRBVXyNWQKV3WKdwrnuWih0
+hKWbt5DHDAff9Yk2dDLWKMGwsAvgnEzDHNb842m1R0aB
+-----END CERTIFICATE-----
+)rawliteral";
+
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
 #define POTENTIOMETER_PIN 34   // Pin für das Potentiometer (muss ein ADC-Pin sein) 1 ESP32 34
@@ -1251,20 +1288,30 @@ void performOtaUpdate(const char* url, const char* version) {
 
   WiFiClientSecure otaClient;
   
-  if (strlen(config.otaCaCert) > 0) {
-    size_t certLen = strlen(config.otaCaCert);
+  const char* certToUse = nullptr;
+  String urlStr = String(url);
+
+  if (urlStr.indexOf("gitlab.com") >= 0) {
+    certToUse = GITLAB_ROOT_CA;
+    Serial.println("OTA: Nutze fest hinterlegtes GitLab Root-Zertifikat.");
+  } else if (strlen(config.otaCaCert) > 0) {
+    certToUse = config.otaCaCert;
+    Serial.println("OTA: Nutze Zertifikat aus der Konfiguration.");
+  }
+
+  if (certToUse != nullptr) {
+    size_t certLen = strlen(certToUse);
     Serial.printf("OTA: Lade CA-Zertifikat (Länge: %d Bytes)\n", certLen);
     
     // Einfache Plausibilitätsprüfung
-    if (config.otaCaCert[0] != '-' || !strstr(config.otaCaCert, "END CERTIFICATE")) {
-      Serial.println("OTA: WARNUNG - Zertifikatsformat scheint ungültig zu sein (kein PEM Heade/Footer gefunden)!");
+    if (certToUse[0] != '-' || !strstr(certToUse, "END CERTIFICATE")) {
+      Serial.println("OTA: WARNUNG - Zertifikatsformat scheint ungültig zu sein!");
     }
 
-    otaClient.setCACert(config.otaCaCert);
-    Serial.println("OTA: Nutze ein CA-Zertifikat zur Verifizierung.");
+    otaClient.setCACert(certToUse);
   } else {
     otaClient.setInsecure();
-    Serial.println("OTA: WARNUNG - Keine Zertifikatsprüfung aktiv!");
+    Serial.println("OTA: WARNUNG - Keine Zertifikatsprüfung aktiv (setInsecure)!");
   }
 
   // Ring blau leuchten lassen während des Updates
@@ -1278,8 +1325,6 @@ void performOtaUpdate(const char* url, const char* version) {
       lastPercent = percent;
       char buf[32];
       sprintf(buf, "Download: %d%%", percent);
-      // Wir können hier publishen, müssen aber vorsichtig sein mit der Stabilität im Callback
-      // Im Zweifel nur Serial Print
       Serial.println(buf);
     }
   });
@@ -1291,7 +1336,6 @@ void performOtaUpdate(const char* url, const char* version) {
       String errorMsg = "Update failed: " + httpUpdate.getLastErrorString();
       Serial.println(errorMsg);
       client.publish("freundschaft/update/status", errorMsg.c_str());
-      // Bei Fehler: Ring rot blinken
       setAllPixels(pixels.Color(255, 0, 0));
       delay(2000);
       setAllPixels(pixels.Color(0, 0, 0));
