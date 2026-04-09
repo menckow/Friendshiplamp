@@ -806,10 +806,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         receivedColor = parsedColor;
         long duration = doc["duration"] | RECEIVED_COLOR_DURATION;
         receivedColorEndTime = millis() + duration;
-
+        
         Serial.println("Starte Anzeige der empfangenen Farbe...");
-        pixels.clear();
-        pixels.show();
         effectStep = 0;
         lastEffectTime = 0;
       }
@@ -835,10 +833,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         strlcpy(receivedEffect, "fade", sizeof(receivedEffect));
 
         Serial.println("Starte Anzeige der empfangenen Farbe...");
-        pixels.clear();
-        pixels.show();
         effectStep = 0;
-        lastEffectTime = 0;
         lastEffectTime = 0;
       }
     }
@@ -936,9 +931,16 @@ void renderEffect() {
   uint8_t baseB = receivedColor & 0xFF;
   
   // Helligkeit berechnen (0.0 - 1.0)
-  float bFact = currentBrightness / 255.0;
+  // SICHERHEIT: Falls die Lampe aus ist (Helligkeit 0) oder sehr dunkel, 
+  // nutzen wir für empfangene Signale eine Mindesthelligkeit von ~60% (150/255)
+  uint8_t effectiveBrightness = currentBrightness;
+  if (effectiveBrightness < 150) effectiveBrightness = 150;
+  
+  float bFact = effectiveBrightness / 255.0;
 
-
+  if (effectStep == 0 && (now - lastEffectTime > 100)) {
+     Serial.printf(">>> Effekt '%s' aktiv. Farbe: #%06X, Helligkeit: %d\n", receivedEffect, receivedColor, effectiveBrightness);
+  }
 
   if (strcmp(receivedEffect, "color_wipe") == 0) {
     if (now - lastEffectTime > 50) {
