@@ -50,7 +50,7 @@ struct Config {
   uint16_t numPixels;
   char effect[32];
   uint32_t duration;
-  char otaCaCert[2048];
+  char otaCaCert[3072];
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -119,6 +119,7 @@ void startNormalMode();
 void startApMode();
 bool isQuietTime();
 void performOtaUpdate(const char* url, const char* version);
+String trimString(String str);
 
 // == Hauptprogramm =========================================================
 void setup() {
@@ -603,7 +604,10 @@ void setupWebServer() {
     if (request->hasParam("mqtt", true)) strlcpy(config.mqttServer, request->getParam("mqtt", true)->value().c_str(), sizeof(config.mqttServer));
     if (request->hasParam("mqtt_port", true)) config.mqttPort = request->getParam("mqtt_port", true)->value().toInt();
     config.mqttTls = request->hasParam("mqtt_tls", true);
-    if (request->hasParam("mqtt_ca", true)) strlcpy(config.mqttCaCert, request->getParam("mqtt_ca", true)->value().c_str(), sizeof(config.mqttCaCert));
+    if (request->hasParam("mqtt_ca", true)) {
+      String ca = trimString(request->getParam("mqtt_ca", true)->value());
+      strlcpy(config.mqttCaCert, ca.c_str(), sizeof(config.mqttCaCert));
+    }
     if (request->hasParam("mqtt_topic", true)) strlcpy(config.mqttTopic, request->getParam("mqtt_topic", true)->value().c_str(), sizeof(config.mqttTopic));
     if (request->hasParam("mqtt_user", true)) strlcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str(), sizeof(config.mqttUser));
     if (request->hasParam("mqtt_pass", true)) strlcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str(), sizeof(config.mqttPassword));
@@ -616,7 +620,10 @@ void setupWebServer() {
     if (request->hasParam("duration", true)) {
       config.duration = request->getParam("duration", true)->value().toInt() * 1000; // convert to ms
     }
-    if (request->hasParam("ota_ca", true)) strlcpy(config.otaCaCert, request->getParam("ota_ca", true)->value().c_str(), sizeof(config.otaCaCert));
+    if (request->hasParam("ota_ca", true)) {
+      String ca = trimString(request->getParam("ota_ca", true)->value());
+      strlcpy(config.otaCaCert, ca.c_str(), sizeof(config.otaCaCert));
+    }
     config.quietModeEnabled = request->hasParam("quiet_enabled", true);
     if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
     if (request->hasParam("quiet_end", true)) config.quietHourEnd = request->getParam("quiet_end", true)->value().toInt();
@@ -1157,6 +1164,11 @@ bool isQuietTime() {
   }
 }
 
+String trimString(String str) {
+  str.trim();
+  return str;
+}
+
 void loadConfiguration() {
   preferences.begin("f-lampe", true); // "f-lampe" = namespace, true = read-only
   preferences.getString("ssid", config.ssid, sizeof(config.ssid));
@@ -1240,6 +1252,14 @@ void performOtaUpdate(const char* url, const char* version) {
   WiFiClientSecure otaClient;
   
   if (strlen(config.otaCaCert) > 0) {
+    size_t certLen = strlen(config.otaCaCert);
+    Serial.printf("OTA: Lade CA-Zertifikat (Länge: %d Bytes)\n", certLen);
+    
+    // Einfache Plausibilitätsprüfung
+    if (config.otaCaCert[0] != '-' || !strstr(config.otaCaCert, "END CERTIFICATE")) {
+      Serial.println("OTA: WARNUNG - Zertifikatsformat scheint ungültig zu sein (kein PEM Heade/Footer gefunden)!");
+    }
+
     otaClient.setCACert(config.otaCaCert);
     Serial.println("OTA: Nutze ein CA-Zertifikat zur Verifizierung.");
   } else {
