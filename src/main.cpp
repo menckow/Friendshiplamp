@@ -2,6 +2,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPUpdate.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <PubSubClient.h>
@@ -9,6 +10,8 @@
 #include <DNSServer.h>
 #include <time.h>
 #include <ArduinoJson.h>
+
+const char* FW_VERSION = "2.1.0";
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
@@ -47,6 +50,7 @@ struct Config {
   uint16_t numPixels;
   char effect[32];
   uint32_t duration;
+  char otaCaCert[2048];
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -114,6 +118,7 @@ uint32_t hexToColor(const char* hexStr);
 void startNormalMode();
 void startApMode();
 bool isQuietTime();
+void performOtaUpdate(const char* url, const char* version);
 
 // == Hauptprogramm =========================================================
 void setup() {
@@ -471,6 +476,9 @@ void setupWebServer() {
         <input type='text' id='mqtt_user' name='mqtt_user' value=''>
         <label for='mqtt_pass'>MQTT Passwort (optional):</label>
         <input type='password' id='mqtt_pass' name='mqtt_pass' value=''>
+        <label for='ota_ca'>OTA Firmware CA Zertifikat (optional):</label>
+        <p class="help-text">Wird zur Verifizierung von HTTPS-Download-Servern (z.B. GitHub) verwendet.</p>
+        <textarea id='ota_ca' name='ota_ca' placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
       </fieldset>
       
       <fieldset>
@@ -527,6 +535,7 @@ void setupWebServer() {
     script += "document.getElementById('mqtt_topic').value = '" + String(config.mqttTopic) + "';\n";
     script += "document.getElementById('mqtt_user').value = '" + String(config.mqttUser) + "';\n";
     script += "document.getElementById('mqtt_pass').value = '" + String(config.mqttPassword) + "';\n";
+    script += "document.getElementById('ota_ca').value = `" + String(config.otaCaCert) + "`;\n";
     char hexColor[8];
     sprintf(hexColor, "#%06X", config.identityColor);
     script += "document.getElementById('color').value = '" + String(hexColor) + "';\n";
@@ -607,6 +616,7 @@ void setupWebServer() {
     if (request->hasParam("duration", true)) {
       config.duration = request->getParam("duration", true)->value().toInt() * 1000; // convert to ms
     }
+    if (request->hasParam("ota_ca", true)) strlcpy(config.otaCaCert, request->getParam("ota_ca", true)->value().c_str(), sizeof(config.otaCaCert));
     config.quietModeEnabled = request->hasParam("quiet_enabled", true);
     if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
     if (request->hasParam("quiet_end", true)) config.quietHourEnd = request->getParam("quiet_end", true)->value().toInt();
@@ -743,9 +753,14 @@ void reconnectMqtt() {
 
   if (success) {
     Serial.println("verbunden!");
-    // Topic für eingehende Farbnachrichten abonnieren
+    // Topics abonnieren
     client.subscribe(config.mqttTopic);
-    Serial.printf("Topic '%s' abonniert.\n", config.mqttTopic);
+    client.subscribe("freundschaft/update/trigger");
+    Serial.printf("Topics '%s' und 'freundschaft/update/trigger' abonniert.\n", config.mqttTopic);
+
+    // Aktuelle Version beim Start melden
+    String statusMsg = "V" + String(FW_VERSION) + " online (" + config.mqttClientId + ")";
+    client.publish("freundschaft/update/status", statusMsg.c_str());
   } else {
     Serial.print("Fehler, rc=");
     Serial.print(client.state());
@@ -824,6 +839,24 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         pixels.show();
         effectStep = 0;
         lastEffectTime = 0;
+        lastEffectTime = 0;
+      }
+    }
+  } else if (strcmp(topic, "freundschaft/update/trigger") == 0) {
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, payload, length);
+    if (!error) {
+      const char* url = doc["url"] | "";
+      const char* version = doc["version"] | "";
+      
+      if (strlen(url) > 0 && strlen(version) > 0) {
+        if (strcmp(version, FW_VERSION) != 0) {
+          Serial.printf("Update-Befehl empfangen: %s (Aktuell: %s)\n", version, FW_VERSION);
+          performOtaUpdate(url, version);
+        } else {
+          Serial.println("Update ignoriert: Version ist bereits aktuell.");
+          client.publish("freundschaft/update/status", "Already up to date");
+        }
       }
     }
   }
@@ -1159,6 +1192,7 @@ void loadConfiguration() {
     strcpy(config.effect, "fade");
   }
   config.duration = preferences.getUInt("duration", 10000);
+  preferences.getString("otaCaCert", config.otaCaCert, sizeof(config.otaCaCert));
   preferences.end();
 
   Serial.println("Konfiguration geladen:");
@@ -1191,7 +1225,69 @@ void saveConfiguration() {
   preferences.putUShort("numPixels", config.numPixels);
   preferences.putString("effect", config.effect);
   preferences.putUInt("duration", config.duration);
+  preferences.putString("otaCaCert", config.otaCaCert);
   preferences.end();
 
   Serial.println("Konfiguration wurde gespeichert.");
+}
+
+void performOtaUpdate(const char* url, const char* version) {
+  Serial.println("OTA Update Prozess gestartet...");
+  
+  // Status via MQTT melden
+  String startMsg = "Updating from " + String(FW_VERSION) + " to " + String(version);
+  client.publish("freundschaft/update/status", startMsg.c_str());
+  client.loop(); // Sicherstellen, dass die Nachricht gesendet wird
+
+  WiFiClientSecure otaClient;
+  
+  if (strlen(config.otaCaCert) > 0) {
+    otaClient.setCACert(config.otaCaCert);
+    Serial.println("OTA: Nutze ein CA-Zertifikat zur Verifizierung.");
+  } else {
+    otaClient.setInsecure();
+    Serial.println("OTA: WARNUNG - Keine Zertifikatsprüfung aktiv!");
+  }
+
+  // Ring blau leuchten lassen während des Updates
+  setAllPixels(pixels.Color(0, 0, 255));
+
+  // Fortschritts-Handling
+  httpUpdate.onProgress([](int cur, int total) {
+    static int lastPercent = -1;
+    int percent = (cur * 100) / total;
+    if (percent % 10 == 0 && percent != lastPercent) {
+      lastPercent = percent;
+      char buf[32];
+      sprintf(buf, "Download: %d%%", percent);
+      // Wir können hier publishen, müssen aber vorsichtig sein mit der Stabilität im Callback
+      // Im Zweifel nur Serial Print
+      Serial.println(buf);
+    }
+  });
+
+  t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+
+  switch (ret) {
+    case HTTP_UPDATE_FAILED: {
+      String errorMsg = "Update failed: " + httpUpdate.getLastErrorString();
+      Serial.println(errorMsg);
+      client.publish("freundschaft/update/status", errorMsg.c_str());
+      // Bei Fehler: Ring rot blinken
+      setAllPixels(pixels.Color(255, 0, 0));
+      delay(2000);
+      setAllPixels(pixels.Color(0, 0, 0));
+      break;
+    }
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("Keine Updates verfügbar.");
+      client.publish("freundschaft/update/status", "No updates available");
+      break;
+    case HTTP_UPDATE_OK:
+      Serial.println("Update erfolgreich! ESP32 startet neu...");
+      client.publish("freundschaft/update/status", "Success! Rebooting...");
+      client.loop();
+      delay(1000);
+      break;
+  }
 }
