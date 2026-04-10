@@ -743,15 +743,23 @@ void setupMqtt() {
 void reconnectMqtt() {
   Serial.print("Versuche, MQTT-Verbindung herzustellen...");
   String clientId = String(config.mqttClientId);
-  if(clientId.length() == 0) clientId = "Freundschaftslampe-" + String(random(0xffff), HEX);
+  if(clientId.length() == 0) {
+    clientId = "Freundschaftslampe-" + String(random(0xffff), HEX);
+    strlcpy(config.mqttClientId, clientId.c_str(), sizeof(config.mqttClientId));
+  }
+  
+  // Status-Topic für diese spezifische Lampe
+  String statusTopic = "freundschaftslampe/status/" + clientId;
+  String lwtMessage = "offline";
   
   bool success;
-  // Prüfen, ob ein Benutzername für die Verbindung verwendet werden soll
+  // Verbinde mit Last Will (LWT): Wenn Verbindung abbricht, setzt Broker Status auf 'offline'
   if (strlen(config.mqttUser) > 0) {
-    Serial.printf("\n  -> Verbinde mit Benutzer: %s\n", config.mqttUser);
-    success = client.connect(clientId.c_str(), config.mqttUser, config.mqttPassword);
+    Serial.printf("\n  -> Verbinde mit Benutzer: %s (LWT auf %s)\n", config.mqttUser, statusTopic.c_str());
+    success = client.connect(clientId.c_str(), config.mqttUser, config.mqttPassword, 
+                           statusTopic.c_str(), 1, true, lwtMessage.c_str());
   } else {
-    success = client.connect(clientId.c_str());
+    success = client.connect(clientId.c_str(), statusTopic.c_str(), 1, true, lwtMessage.c_str());
   }
 
   if (success) {
@@ -761,9 +769,13 @@ void reconnectMqtt() {
     client.subscribe("freundschaftslampe/update/trigger");
     Serial.printf("Topics '%s' und 'freundschaftslampe/update/trigger' abonniert.\n", config.mqttTopic);
 
-    // Aktuelle Version beim Start melden: Format Version:ClientID
-    String statusMsg = String(FW_VERSION) + ":" + String(config.mqttClientId);
-    client.publish("freundschaftslampe/update/status", statusMsg.c_str());
+    // Aktuelle Version und 'online' Status melden (RETAINED)
+    // Format: Version:Status (z.B. 2.1.2:online)
+    String statusMsg = String(FW_VERSION) + ":online";
+    client.publish(statusTopic.c_str(), statusMsg.c_str(), true);
+    
+    // Zusätzlich allgemeines Status-Topic für Logs (optional)
+    client.publish("freundschaftslampe/update/status", (String(FW_VERSION) + ":" + clientId).c_str());
   } else {
     Serial.print("Fehler, rc=");
     Serial.print(client.state());
@@ -1240,7 +1252,9 @@ void performOtaUpdate(const char* url, const char* version) {
   Serial.printf("Update-URL: %s\n", url);
   
   // Status via MQTT melden
-  String startMsg = "Updating from " + String(FW_VERSION) + " to " + String(version);
+  String statusTopic = "freundschaftslampe/status/" + String(config.mqttClientId);
+  String startMsg = "Updating to " + String(version);
+  client.publish(statusTopic.c_str(), (String(FW_VERSION) + ":" + startMsg).c_str(), true);
   client.publish("freundschaftslampe/update/status", startMsg.c_str());
   client.loop(); 
 
