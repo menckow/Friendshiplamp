@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Friendship Lamp Manager</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- MQTT.js via CDN -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --accent: #ec4899;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #818cf8, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .status-connected { color: var(--success); border-color: var(--success); }
+        .status-disconnected { color: var(--danger); border-color: var(--danger); }
+
+        .dashboard-grid {
+            display: grid;
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 0 15px;
+            color: #94a3b8;
+            font-weight: 400;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        tr.lamp-row {
+            background: rgba(255, 255, 255, 0.03);
+            transition: transform 0.2s, background 0.3s;
+        }
+
+        tr.lamp-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+            transform: scale(1.01);
+        }
+
+        td {
+            padding: 15px;
+        }
+
+        td:first-child { border-radius: 12px 0 0 12px; }
+        td:last-child { border-radius: 0 12px 12px 0; }
+
+        .lamp-id { font-weight: 600; color: #cbd5e1; }
+        .version-pill {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: monospace;
+        }
+
+        .status-pill {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .pill-online { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .pill-offline { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .pill-updating { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+
+        .btn-update {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-update:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-update:active { transform: translateY(0); }
+
+        .update-form {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 16px;
+            margin-top: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 15px;
+            border-radius: 12px;
+            color: white;
+            flex: 1;
+            font-family: inherit;
+        }
+
+        input:focus { outline: 2px solid var(--primary); }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .no-devices {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Lamp Manager</h1>
+            <div id="mqtt-status" class="status-badge status-disconnected">Verbinde zum Broker...</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Lamp Table Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Aktive Lampen</div>
+                    <div id="device-count">0 Geräte gefunden</div>
+                </div>
+                
+                <table id="lamp-table">
+                    <thead>
+                        <tr>
+                            <th>Lampe ID</th>
+                            <th>Version</th>
+                            <th>Status</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lamp-list">
+                        <!-- Wird dynamisch gefüllt -->
+                    </tbody>
+                </table>
+                <div id="no-devices" class="no-devices">Warte auf Signale von Lampen...</div>
+            </div>
+
+            <!-- Global Update Card -->
+            <div class="card">
+                <div class="card-title">Zentrales OTA Update</div>
+                <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">
+                    Sende einen Update-Befehl an das globale Trigger-Topic.
+                </p>
+                <div class="update-form">
+                    <div class="input-group">
+                        <input type="text" id="ota-url" placeholder="Firmware URL (z.B. https://.../firmware.bin)">
+                        <input type="text" id="ota-version" placeholder="Ziel-Version (z.B. 2.1.3)" style="max-width: 150px;">
+                        <button class="btn-update" onclick="broadcastUpdate()">Update an Alle senden</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Konfiguration ---
+        const BROKER = "745091a9286a46d7a32c66c6ac71a382.s1.eu.hivemq.cloud";
+        const PORT = 8884;
+        const USERNAME = "Lampe";
+        const PASSWORD = "Ostsee2000";
+        const STATUS_TOPIC = "freundschaftslampe/status/#";
+        const UPDATE_TOPIC = "freundschaftslampe/update/trigger";
+
+        let devices = {}; // Store lamp data
+
+        // --- MQTT Verbindung ---
+        const options = {
+            clientId: 'manager_' + Math.random().toString(16).substr(2, 8),
+            username: USERNAME,
+            password: PASSWORD,
+            clean: true,
+            connectTimeout: 4000,
+            reconnectPeriod: 1000,
+            protocol: 'wss' // Secure WebSockets
+        };
+
+        const client = mqtt.connect(`wss://${BROKER}:${PORT}/mqtt`, options);
+
+        const statusLabel = document.getElementById('mqtt-status');
+
+        client.on('connect', () => {
+            console.log('Verbunden!');
+            statusLabel.innerText = "Verbunden";
+            statusLabel.className = "status-badge status-connected";
+            client.subscribe(STATUS_TOPIC);
+        });
+
+        client.on('error', (err) => {
+            console.error('MQTT Fehler:', err);
+            statusLabel.innerText = "Verbindungsfehler";
+            statusLabel.className = "status-badge status-disconnected";
+        });
+
+        client.on('message', (topic, message) => {
+            const payload = message.toString();
+            console.log(`Topic: ${topic}, Message: ${payload}`);
+
+            // Topic Format: freundschaftslampe/status/ClientID
+            const parts = topic.split('/');
+            if (parts.length < 3) return;
+            const clientId = parts[parts.length - 1];
+
+            // Payload Format: Version:Status (online/offline/Updating...)
+            const dataParts = payload.split(':');
+            const version = dataParts[0] || 'Unknown';
+            const status = dataParts[1] || payload; // Falls kein Doppelpunkt, nimm kompletten Payload (z.B. 'offline')
+
+            updateDeviceList(clientId, version, status);
+        });
+
+        function updateDeviceList(id, version, status) {
+            devices[id] = { version, status, lastSeen: Date.now() };
+            renderTable();
+        }
+
+        function renderTable() {
+            const list = document.getElementById('lamp-list');
+            const noDevices = document.getElementById('no-devices');
+            const count = document.getElementById('device-count');
+            
+            list.innerHTML = '';
+            const entries = Object.entries(devices);
+            
+            if (entries.length > 0) {
+                noDevices.style.display = 'none';
+                count.innerText = `${entries.length} Gerät(e) gefunden`;
+            }
+
+            entries.sort().forEach(([id, data]) => {
+                const row = document.createElement('tr');
+                row.className = 'lamp-row';
+
+                let statusClass = 'pill-online';
+                let statusText = data.status;
+
+                if (data.status === 'offline') {
+                    statusClass = 'pill-offline';
+                } else if (data.status.toLowerCase().includes('update')) {
+                    statusClass = 'pill-updating';
+                }
+
+                row.innerHTML = `
+                    <td><span class="lamp-id">${id}</span></td>
+                    <td><span class="version-pill">${data.version}</span></td>
+                    <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+                    <td><button class="btn-update" onclick="triggerDeviceUpdate('${id}')">Update</button></td>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        function triggerDeviceUpdate(id) {
+            const url = document.getElementById('ota-url').value;
+            const ver = document.getElementById('ota-version').value;
+            
+            if (!url || !ver) {
+                alert("Bitte fülle URL und Version in der OTA-Update-Karte aus.");
+                return;
+            }
+
+            // Wir senden den Trigger an das globale Topic
+            broadcastUpdate();
+        }
+
+        function broadcastUpdate() {
+            const url = document.getElementById('ota-url').value;
+            const ver = document.getElementById('ota-version').value;
+
+            if (!url || !ver) {
+                alert("Bitte gebe URL und Version an.");
+                return;
+            }
+
+            const payloadBuffer = JSON.stringify({ url: url, version: ver });
+            client.publish(UPDATE_TOPIC, payloadBuffer);
+            console.log("Globaler Update-Trigger gesendet!");
+            alert("Update-Befehl an alle Lampen gesendet.");
+        }
+    </script>
+</body>
+</html>
