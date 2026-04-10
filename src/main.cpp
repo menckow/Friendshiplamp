@@ -10,9 +10,10 @@
 #include <DNSServer.h>
 #include <time.h>
 #include <ArduinoJson.h>
-#include <esp_crt_bundle.h>
 
-const char* FW_VERSION = "2.1.0";
+#include <ArduinoJson.h>
+
+const char* FW_VERSION = "2.1.2";
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
@@ -733,10 +734,10 @@ void setupMqtt() {
   if (config.mqttTls) {
     if (strlen(config.mqttCaCert) > 0) {
       espClientSecure.setCACert(config.mqttCaCert);
-      Serial.println("MQTT-Client: Nutze manuelles CA-Zertifikat aus der Konfiguration.");
+      Serial.println("MQTT-Client: Nutze manuelles CA-Zertifikat.");
     } else {
-      espClientSecure.setCACertBundle(arduino_esp_crt_bundle_attach);
-      Serial.println("MQTT-Client: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
+      espClientSecure.setInsecure();
+      Serial.println("MQTT-Client: Nutze verschlüsselte Verbindung ohne Zertifikatsprüfung (Insecure).");
     }
     client.setClient(espClientSecure);
     Serial.println("MQTT-Client für TLS-Verbindung eingerichtet.");
@@ -1256,15 +1257,21 @@ void performOtaUpdate(const char* url, const char* version) {
 
   WiFiClientSecure otaClient;
   
+  // Wir nutzen setInsecure(), um Zertifikatsfehler zu vermeiden.
+  // Die Verbindung bleibt HTTPS (verschlüsselt), aber die Identität des Servers wird nicht geprüft.
   if (strlen(config.otaCaCert) > 0) {
-    Serial.println("OTA: Nutze manuelles Zertifikat aus der Konfiguration (Override).");
+    otaClient.setCACert(config.otaCaCert);
+    Serial.println("OTA: Nutze manuelles Zertifikat aus der Konfiguration.");
   } else {
-    otaClient.setCACertBundle(arduino_esp_crt_bundle_attach);
-    Serial.println("OTA: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
+    otaClient.setInsecure();
+    Serial.println("OTA: Nutze Insecure-Mode (keine Zertifikatsprüfung).");
   }
 
   // Ring blau leuchten lassen während des Updates
   setAllPixels(pixels.Color(0, 0, 255));
+
+  // WICHTIG: GitHub nutzt Redirects (302). Diese müssen wir explizit erlauben.
+  httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   // Fortschritts-Handling
   httpUpdate.onProgress([](int cur, int total) {
