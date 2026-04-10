@@ -52,7 +52,6 @@ struct Config {
   uint16_t numPixels;
   char effect[32];
   uint32_t duration;
-  char otaCaCert[3072];
 };
 
 Config config; // Globale Konfigurationsvariable
@@ -479,9 +478,6 @@ void setupWebServer() {
         <input type='text' id='mqtt_user' name='mqtt_user' value=''>
         <label for='mqtt_pass'>MQTT Passwort (optional):</label>
         <input type='password' id='mqtt_pass' name='mqtt_pass' value=''>
-        <label for='ota_ca'>OTA Firmware CA Zertifikat (optional):</label>
-        <p class="help-text">Wird zur Verifizierung von HTTPS-Download-Servern (z.B. GitHub) verwendet.</p>
-        <textarea id='ota_ca' name='ota_ca' placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"></textarea>
       </fieldset>
       
       <fieldset>
@@ -538,7 +534,6 @@ void setupWebServer() {
     script += "document.getElementById('mqtt_topic').value = '" + String(config.mqttTopic) + "';\n";
     script += "document.getElementById('mqtt_user').value = '" + String(config.mqttUser) + "';\n";
     script += "document.getElementById('mqtt_pass').value = '" + String(config.mqttPassword) + "';\n";
-    script += "document.getElementById('ota_ca').value = `" + String(config.otaCaCert) + "`;\n";
     char hexColor[8];
     sprintf(hexColor, "#%06X", config.identityColor);
     script += "document.getElementById('color').value = '" + String(hexColor) + "';\n";
@@ -621,10 +616,6 @@ void setupWebServer() {
     }
     if (request->hasParam("duration", true)) {
       config.duration = request->getParam("duration", true)->value().toInt() * 1000; // convert to ms
-    }
-    if (request->hasParam("ota_ca", true)) {
-      String ca = trimString(request->getParam("ota_ca", true)->value());
-      strlcpy(config.otaCaCert, ca.c_str(), sizeof(config.otaCaCert));
     }
     config.quietModeEnabled = request->hasParam("quiet_enabled", true);
     if (request->hasParam("quiet_start", true)) config.quietHourStart = request->getParam("quiet_start", true)->value().toInt();
@@ -1207,7 +1198,6 @@ void loadConfiguration() {
     strcpy(config.effect, "fade");
   }
   config.duration = preferences.getUInt("duration", 10000);
-  preferences.getString("otaCaCert", config.otaCaCert, sizeof(config.otaCaCert));
   preferences.end();
 
   Serial.println("Konfiguration geladen:");
@@ -1240,7 +1230,6 @@ void saveConfiguration() {
   preferences.putUShort("numPixels", config.numPixels);
   preferences.putString("effect", config.effect);
   preferences.putUInt("duration", config.duration);
-  preferences.putString("otaCaCert", config.otaCaCert);
   preferences.end();
 
   Serial.println("Konfiguration wurde gespeichert.");
@@ -1259,13 +1248,8 @@ void performOtaUpdate(const char* url, const char* version) {
   
   // Wir nutzen setInsecure(), um Zertifikatsfehler zu vermeiden.
   // Die Verbindung bleibt HTTPS (verschlüsselt), aber die Identität des Servers wird nicht geprüft.
-  if (strlen(config.otaCaCert) > 0) {
-    otaClient.setCACert(config.otaCaCert);
-    Serial.println("OTA: Nutze manuelles Zertifikat aus der Konfiguration.");
-  } else {
-    otaClient.setInsecure();
-    Serial.println("OTA: Nutze Insecure-Mode (keine Zertifikatsprüfung).");
-  }
+  otaClient.setInsecure();
+  Serial.println("OTA: Nutze Insecure-Mode (keine Zertifikatsprüfung).");
 
   // Ring blau leuchten lassen während des Updates
   setAllPixels(pixels.Color(0, 0, 255));
