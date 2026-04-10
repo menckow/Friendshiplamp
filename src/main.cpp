@@ -10,79 +10,11 @@
 #include <DNSServer.h>
 #include <time.h>
 #include <ArduinoJson.h>
+#include <esp_crt_bundle.h>
 
 const char* FW_VERSION = "2.1.0";
 
-// USERTrust RSA Certification Authority (GitLab.com)
-const char* GITLAB_ROOT_CA = R"rawliteral(
------BEGIN CERTIFICATE-----
-MIIF3jCCA8agAwIBAgIQAf1tMPyjylGoG7xkDjUDLTANBgkqhkiG9w0BAQwFADCB
-iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl
-cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV
-BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTAw
-MjAxMDAwMDAwWhcNMzgwMTE4MjM1OTU5WjCBiDELMAkGA1UEBhMCVVMxEzARBgNV
-BAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0plcnNleSBDaXR5MR4wHAYDVQQKExVU
-aGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNVBAMTJVVTRVJUcnVzdCBSU0EgQ2Vy
-dGlmaWNhdGlvbiBBdXRob3JpdHkwggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIK
-AoICAQCAEmUXNg7D2wiz0KxXDXbtzSfTTK1Qg2HiqiBNCS1kCdzOiZ/MPans9s/B
-3PHTsdZ7NygRK0faOca8Ohm0X6a9fZ2jY0K2dvKpOyuR+OJv0OwWIJAJPuLodMkY
-tJHUYmTbf6MG8YgYapAiPLz+E/CHFHv25B+O1ORRxhFnRghRy4YUVD+8M/5+bJz/
-Fp0YvVGONaanZshyZ9shZrHUm3gDwFA66Mzw3LyeTP6vBZY1H1dat//O+T23LLb2
-VN3I5xI6Ta5MirdcmrS3ID3KfyI0rn47aGYBROcBTkZTmzNg95S+UzeQc0PzMsNT
-79uq/nROacdrjGCT3sTHDN/hMq7MkztReJVni+49Vv4M0GkPGw/zJSZrM233bkf6
-c0Plfg6lZrEpfDKEY1WJxA3Bk1QwGROs0303p+tdOmw1XNtB1xLaqUkL39iAigmT
-Yo61Zs8liM2EuLE/pDkP2QKe6xJMlXzzawWpXhaDzLhn4ugTncxbgtNMs+1b/97l
-c6wjOy0AvzVVdAlJ2ElYGn+SNuZRkg7zJn0cTRe8yexDJtC/QV9AqURE9JnnV4ee
-UB9XVKg+/XRjL7FQZQnmWEIuQxpMtPAlR1n6BB6T1CZGSlCBst6+eLf8ZxXhyVeE
-Hg9j1uliutZfVS7qXMYoCAQlObgOK6nyTJccBz8NUvXt7y+CDwIDAQABo0IwQDAd
-BgNVHQ4EFgQUU3m/WqorSs9UgOHYm8Cd8rIDZsswDgYDVR0PAQH/BAQDAgEGMA8G
-A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEMBQADggIBAFzUfA3P9wF9QZllDHPF
-Up/L+M+ZBn8b2kMVn54CVVeWFPFSPCeHlCjtHzoBN6J2/FNQwISbxmtOuowhT6KO
-VWKR82kV2LyI48SqC/3vqOlLVSoGIG1VeCkZ7l8wXEskEVX/JJpuXior7gtNn3/3
-ATiUFJVDBwn7YKnuHKsSjKCaXqeYalltiz8I+8jRRa8YFWSQEg9zKC7F4iRO/Fjs
-8PRF/iKz6y+O0tlFYQXBl2+odnKPi4w2r78NBc5xjeambx9spnFixdjQg3IM8WcR
-iQycE0xyNN+81XHfqnHd4blsjDwSXWXavVcStkNr/+XeTWYRUc+ZruwXtuhxkYze
-Sf7dNXGiFSeUHM9h4ya7b6NnJSFd5t0dCy5oGzuCr+yDZ4XUmFF0sbmZgIn/f3gZ
-XHlKYC6SQK5MNyosycdiyA5d9zZbyuAlJQG03RoHnHcAP9Dc1ew91Pq7P8yF1m9/
-qS3fuQL39ZeatTXaw2ewh0qpKJ4jjv9cJ2vhsE/zB+4ALtRZh8tSQZXq9EfX7mRB
-VXyNWQKV3WKdwrnuWih0hKWbt5DHDAff9Yk2dDLWKMGwsAvgnEzDHNb842m1R0aB
------END CERTIFICATE-----
-)rawliteral";
-
-// DigiCert Global Root G2 (GitHub.com)
-const char* GITHUB_ROOT_CA = R"rawliteral(
------BEGIN CERTIFICATE-----
-MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh
-MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3
-d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH
-MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT
-MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j
-b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG
-9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzjsUI8pZJg98+6Lky2W/JAd3C4knd265QFB
-Iat5uS6i6QhE9f/YfS0A+l228z4/NlyX+N4R5wH4M+zB+YhJp4B9N930v2gWhA5/
-I2669BJB7lD0SIszCjNuh+U5gB0fT17PghdM+4/q+H+9zU+f9909999999999999
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzjsUI8pZJg98+6Lky2W
-/JAd3C4knd265QFBIat5uS6i6QhE9f/YfS0A+l228z4/NlyX+N4R5wH4M+zB+YhJ
-p4B9N930v2gWhA5/I2669BJB7lD0SIszCjNuh+U5gB0fT17PghdM+4/q+H+9zU+f
-9909999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-999999999999999999999999999999999999999999999999BwIDAQABo0IwQDAd
-BgNVHQ4EFgQUu9u/tmLydqc8SCSvUCAR6CoSjKIwDgYDVR0PAQH/BAQDAgEGMA8G
-A1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAMA7mOcr54LAnE2v+M6t
-Y4aX7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7jH7j+
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999999999999999999999
-9999999999999999999999999999999999999999999999995O6f/pS+EAhZ1+A6
-39rF-----END CERTIFICATE-----
-)rawliteral";
+const char* FW_VERSION = "2.1.0";
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
@@ -803,7 +735,10 @@ void setupMqtt() {
   if (config.mqttTls) {
     if (strlen(config.mqttCaCert) > 0) {
       espClientSecure.setCACert(config.mqttCaCert);
-      Serial.println("MQTT-Client: CA-Zertifikat wird verwendet.");
+      Serial.println("MQTT-Client: Nutze manuelles CA-Zertifikat aus der Konfiguration.");
+    } else {
+      espClientSecure.setCACertBundle(arduino_esp_certificate_bundle_get_all);
+      Serial.println("MQTT-Client: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
     }
     client.setClient(espClientSecure);
     Serial.println("MQTT-Client für TLS-Verbindung eingerichtet.");
@@ -1323,33 +1258,12 @@ void performOtaUpdate(const char* url, const char* version) {
 
   WiFiClientSecure otaClient;
   
-  const char* certToUse = nullptr;
-  String urlStr = String(url);
-  urlStr.toLowerCase();
-
-  if (urlStr.indexOf("gitlab.com") >= 0) {
-    certToUse = GITLAB_ROOT_CA;
-    Serial.println("OTA: Nutze fest hinterlegtes GitLab Root-Zertifikat (Sectigo/USERTrust).");
-  } else if (urlStr.indexOf("github.com") >= 0) {
-    certToUse = GITHUB_ROOT_CA;
-    Serial.println("OTA: Nutze fest hinterlegtes GitHub Root-Zertifikat (DigiCert).");
-  } else if (strlen(config.otaCaCert) > 0) {
-    certToUse = config.otaCaCert;
-    Serial.println("OTA: Nutze Zertifikat aus der NVS-Konfiguration.");
-  }
-
-  if (certToUse != nullptr) {
-    size_t certLen = strlen(certToUse);
-    Serial.printf("OTA: Lade CA-Zertifikat (Länge: %d Bytes)\n", certLen);
-    
-    if (certToUse[0] != '-' || !strstr(certToUse, "END CERTIFICATE")) {
-      Serial.println("OTA: SCHWERER FEHLER - Zertifikatsformat ist ungültig!");
-    }
-
-    otaClient.setCACert(certToUse);
+  if (strlen(config.otaCaCert) > 0) {
+    otaClient.setCACert(config.otaCaCert);
+    Serial.println("OTA: Nutze manuelles Zertifikat aus der Konfiguration (Override).");
   } else {
-    otaClient.setInsecure();
-    Serial.println("OTA: WARNUNG - Keine Zertifikatsprüfung aktiv (setInsecure)!");
+    otaClient.setCACertBundle(arduino_esp_certificate_bundle_get_all);
+    Serial.println("OTA: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
   }
 
   // Ring blau leuchten lassen während des Updates
