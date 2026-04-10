@@ -758,12 +758,12 @@ void reconnectMqtt() {
     Serial.println("verbunden!");
     // Topics abonnieren
     client.subscribe(config.mqttTopic);
-    client.subscribe("freundschaft/update/trigger");
-    Serial.printf("Topics '%s' und 'freundschaft/update/trigger' abonniert.\n", config.mqttTopic);
+    client.subscribe("freundschaftslampe/update/trigger");
+    Serial.printf("Topics '%s' und 'freundschaftslampe/update/trigger' abonniert.\n", config.mqttTopic);
 
-    // Aktuelle Version beim Start melden
-    String statusMsg = "V" + String(FW_VERSION) + " online (" + config.mqttClientId + ")";
-    client.publish("freundschaft/update/status", statusMsg.c_str());
+    // Aktuelle Version beim Start melden: Format Version:ClientID
+    String statusMsg = String(FW_VERSION) + ":" + String(config.mqttClientId);
+    client.publish("freundschaftslampe/update/status", statusMsg.c_str());
   } else {
     Serial.print("Fehler, rc=");
     Serial.print(client.state());
@@ -840,7 +840,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         lastEffectTime = 0;
       }
     }
-  } else if (strcmp(topic, "freundschaft/update/trigger") == 0) {
+  } else if (strcmp(topic, "freundschaftslampe/update/trigger") == 0) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload, length);
     if (!error) {
@@ -853,7 +853,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
           performOtaUpdate(url, version);
         } else {
           Serial.println("Update ignoriert: Version ist bereits aktuell.");
-          client.publish("freundschaft/update/status", "Already up to date");
+          client.publish("freundschaftslampe/update/status", "Already up to date");
         }
       }
     }
@@ -1241,7 +1241,7 @@ void performOtaUpdate(const char* url, const char* version) {
   
   // Status via MQTT melden
   String startMsg = "Updating from " + String(FW_VERSION) + " to " + String(version);
-  client.publish("freundschaft/update/status", startMsg.c_str());
+  client.publish("freundschaftslampe/update/status", startMsg.c_str());
   client.loop(); 
 
   WiFiClientSecure otaClient;
@@ -1275,7 +1275,7 @@ void performOtaUpdate(const char* url, const char* version) {
     case HTTP_UPDATE_FAILED: {
       String errorMsg = "Update failed: " + httpUpdate.getLastErrorString();
       Serial.println(errorMsg);
-      client.publish("freundschaft/update/status", errorMsg.c_str());
+      client.publish("freundschaftslampe/update/status", errorMsg.c_str());
       setAllPixels(pixels.Color(255, 0, 0));
       delay(2000);
       setAllPixels(pixels.Color(0, 0, 0));
@@ -1283,11 +1283,11 @@ void performOtaUpdate(const char* url, const char* version) {
     }
     case HTTP_UPDATE_NO_UPDATES:
       Serial.println("Keine Updates verfügbar.");
-      client.publish("freundschaft/update/status", "No updates available");
+      client.publish("freundschaftslampe/update/status", "No updates available");
       break;
     case HTTP_UPDATE_OK:
       Serial.println("Update erfolgreich! ESP32 startet neu...");
-      client.publish("freundschaft/update/status", "Success! Rebooting...");
+      client.publish("freundschaftslampe/update/status", "Success! Rebooting...");
       client.loop();
       delay(1000);
       break;
