@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Friendship Lamp Manager</title>
+    <title>Device Manager (Lampen & Boxen)</title>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <!-- MQTT.js via CDN -->
@@ -37,7 +37,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
@@ -113,12 +113,12 @@
             letter-spacing: 1px;
         }
 
-        tr.lamp-row {
+        tr.device-row {
             background: rgba(255, 255, 255, 0.03);
             transition: transform 0.2s, background 0.3s;
         }
 
-        tr.lamp-row:hover {
+        tr.device-row:hover {
             background: rgba(255, 255, 255, 0.07);
             transform: scale(1.01);
         }
@@ -130,7 +130,16 @@
         td:first-child { border-radius: 12px 0 0 12px; }
         td:last-child { border-radius: 0 12px 12px 0; }
 
-        .lamp-id { font-weight: 600; color: #cbd5e1; }
+        .device-id { font-weight: 600; color: #cbd5e1; }
+        .type-pill {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
         .version-pill {
             background: rgba(99, 102, 241, 0.2);
             color: #818cf8;
@@ -183,6 +192,7 @@
             display: flex;
             gap: 15px;
             margin-top: 10px;
+            flex-wrap: wrap;
         }
 
         input {
@@ -192,6 +202,7 @@
             border-radius: 12px;
             color: white;
             flex: 1;
+            min-width: 200px;
             font-family: inherit;
         }
 
@@ -218,45 +229,60 @@
 <body>
     <div class="container">
         <header>
-            <h1>Lamp Manager</h1>
+            <h1>Device Manager</h1>
             <div id="mqtt-status" class="status-badge status-disconnected">Verbinde zum Broker...</div>
         </header>
 
         <div class="dashboard-grid">
-            <!-- Lamp Table Card -->
+            <!-- Table Card -->
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Aktive Lampen</div>
+                    <div class="card-title">Gefundene Geräte</div>
                     <div id="device-count">0 Geräte gefunden</div>
                 </div>
                 
-                <table id="lamp-table">
+                <table id="device-table">
                     <thead>
                         <tr>
-                            <th>Lampe ID</th>
+                            <th>ID</th>
+                            <th>Typ</th>
                             <th>Version</th>
                             <th>Status</th>
                             <th>Aktion</th>
                         </tr>
                     </thead>
-                    <tbody id="lamp-list">
+                    <tbody id="device-list">
                         <!-- Wird dynamisch gefüllt -->
                     </tbody>
                 </table>
-                <div id="no-devices" class="no-devices">Warte auf Signale von Lampen...</div>
+                <div id="no-devices" class="no-devices">Warte auf Signale...</div>
             </div>
 
-            <!-- Global Update Card -->
-            <div class="card">
-                <div class="card-title">Zentrales OTA Update</div>
-                <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">
-                    Sende einen Update-Befehl an das globale Trigger-Topic.
-                </p>
-                <div class="update-form">
-                    <div class="input-group">
-                        <input type="text" id="ota-url" placeholder="Firmware URL (z.B. https://.../firmware.bin)">
-                        <input type="text" id="ota-version" placeholder="Ziel-Version (z.B. 2.1.3)" style="max-width: 150px;">
-                        <button class="btn-update" onclick="broadcastUpdate()">Update an Alle senden</button>
+            <!-- Global Update Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 30px;">
+                <!-- Table for Lamp Update -->
+                <div class="card">
+                    <div class="card-title">Update: Lampen</div>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">Trigger: freundschaftslampe/update/trigger</p>
+                    <div class="update-form">
+                        <div class="input-group">
+                            <input type="text" id="lamp-url" placeholder="Firmware URL">
+                            <input type="text" id="lamp-version" placeholder="Version" style="max-width: 100px;">
+                            <button class="btn-update" onclick="broadcastUpdate('freundschaftslampe')">Alle Lampen upgraden</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table for Zwitscherbox Update -->
+                <div class="card">
+                    <div class="card-title">Update: Zwitscherboxen</div>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">Trigger: zwitscherbox/update/trigger</p>
+                    <div class="update-form">
+                        <div class="input-group">
+                            <input type="text" id="box-url" placeholder="Firmware URL">
+                            <input type="text" id="box-version" placeholder="Version" style="max-width: 100px;">
+                            <button class="btn-update" onclick="broadcastUpdate('zwitscherbox')">Alle Boxen upgraden</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -264,17 +290,13 @@
     </div>
 
     <script>
-        // --- Konfiguration ---
         const BROKER = "745091a9286a46d7a32c66c6ac71a382.s1.eu.hivemq.cloud";
         const PORT = 8884;
         const USERNAME = "Lampe";
         const PASSWORD = "Ostsee2000";
-        const STATUS_TOPIC = "freundschaftslampe/status/#";
-        const UPDATE_TOPIC = "freundschaftslampe/update/trigger";
 
-        let devices = {}; // Store lamp data
+        let devices = {}; 
 
-        // --- MQTT Verbindung ---
         const options = {
             clientId: 'manager_' + Math.random().toString(16).substr(2, 8),
             username: USERNAME,
@@ -282,18 +304,18 @@
             clean: true,
             connectTimeout: 4000,
             reconnectPeriod: 1000,
-            protocol: 'wss' // Secure WebSockets
+            protocol: 'wss'
         };
 
         const client = mqtt.connect(`wss://${BROKER}:${PORT}/mqtt`, options);
-
         const statusLabel = document.getElementById('mqtt-status');
 
         client.on('connect', () => {
             console.log('Verbunden!');
             statusLabel.innerText = "Verbunden";
             statusLabel.className = "status-badge status-connected";
-            client.subscribe(STATUS_TOPIC);
+            // Subscribe auf alle Status-Topics
+            client.subscribe("+/status/#");
         });
 
         client.on('error', (err) => {
@@ -306,26 +328,27 @@
             const payload = message.toString();
             console.log(`Topic: ${topic}, Message: ${payload}`);
 
-            // Topic Format: freundschaftslampe/status/ClientID
+            // Topic Format: <TYPE>/status/<ID>
             const parts = topic.split('/');
             if (parts.length < 3) return;
+            const type = parts[0];
             const clientId = parts[parts.length - 1];
 
-            // Payload Format: Version:Status (online/offline/Updating...)
+            // Payload Format: Version:Status
             const dataParts = payload.split(':');
             const version = dataParts[0] || 'Unknown';
-            const status = dataParts[1] || payload; // Falls kein Doppelpunkt, nimm kompletten Payload (z.B. 'offline')
+            const status = dataParts[1] || payload;
 
-            updateDeviceList(clientId, version, status);
+            updateDeviceList(clientId, type, version, status);
         });
 
-        function updateDeviceList(id, version, status) {
-            devices[id] = { version, status, lastSeen: Date.now() };
+        function updateDeviceList(id, type, version, status) {
+            devices[id] = { type, version, status, lastSeen: Date.now() };
             renderTable();
         }
 
         function renderTable() {
-            const list = document.getElementById('lamp-list');
+            const list = document.getElementById('device-list');
             const noDevices = document.getElementById('no-devices');
             const count = document.getElementById('device-count');
             
@@ -337,9 +360,9 @@
                 count.innerText = `${entries.length} Gerät(e) gefunden`;
             }
 
-            entries.sort().forEach(([id, data]) => {
+            entries.sort((a,b) => a[1].type.localeCompare(b[1].type) || a[0].localeCompare(b[0])).forEach(([id, data]) => {
                 const row = document.createElement('tr');
-                row.className = 'lamp-row';
+                row.className = 'device-row';
 
                 let statusClass = 'pill-online';
                 let statusText = data.status;
@@ -351,41 +374,56 @@
                 }
 
                 row.innerHTML = `
-                    <td><span class="lamp-id">${id}</span></td>
+                    <td><span class="device-id">${id}</span></td>
+                    <td><span class="type-pill">${data.type === 'freundschaftslampe' ? 'Lampe' : 'Box'}</span></td>
                     <td><span class="version-pill">${data.version}</span></td>
                     <td><span class="status-pill ${statusClass}">${statusText}</span></td>
-                    <td><button class="btn-update" onclick="triggerDeviceUpdate('${id}')">Update</button></td>
+                    <td><button class="btn-update" onclick="triggerUpdate('${id}')">Update</button></td>
                 `;
                 list.appendChild(row);
             });
         }
 
-        function triggerDeviceUpdate(id) {
-            const url = document.getElementById('ota-url').value;
-            const ver = document.getElementById('ota-version').value;
+        function triggerUpdate(id) {
+            const device = devices[id];
+            if (!device) return;
+
+            const urlId = device.type === 'freundschaftslampe' ? 'lamp-url' : 'box-url';
+            const verId = device.type === 'freundschaftslampe' ? 'lamp-version' : 'box-version';
+            
+            const url = document.getElementById(urlId).value;
+            const ver = document.getElementById(verId).value;
             
             if (!url || !ver) {
-                alert("Bitte fülle URL und Version in der OTA-Update-Karte aus.");
+                alert(`Bitte fülle URL und Version im Bereich "${device.type === 'freundschaftslampe' ? 'Lampen' : 'Zwitscherboxen'}" aus.`);
                 return;
             }
 
-            // Wir senden den Trigger an das globale Topic
-            broadcastUpdate();
+            const confirmUpdate = confirm(`Soll das Update für das Gerät ${id} (${device.type}) auf Version ${ver} gestartet werden?`);
+            if (confirmUpdate) {
+                const triggerTopic = `${device.type}/update/trigger`;
+                const payloadBuffer = JSON.stringify({ url: url, version: ver });
+                client.publish(triggerTopic, payloadBuffer);
+                alert(`Update-Befehl an ${id} gesendet.`);
+            }
         }
 
-        function broadcastUpdate() {
-            const url = document.getElementById('ota-url').value;
-            const ver = document.getElementById('ota-version').value;
+        function broadcastUpdate(type) {
+            const urlId = type === 'freundschaftslampe' ? 'lamp-url' : 'box-url';
+            const verId = type === 'freundschaftslampe' ? 'lamp-version' : 'box-version';
+            
+            const url = document.getElementById(urlId).value;
+            const ver = document.getElementById(verId).value;
 
             if (!url || !ver) {
-                alert("Bitte gebe URL und Version an.");
+                alert("Bitte gebe URL und Version für diesen Gerätetyp an.");
                 return;
             }
 
+            const triggerTopic = `${type}/update/trigger`;
             const payloadBuffer = JSON.stringify({ url: url, version: ver });
-            client.publish(UPDATE_TOPIC, payloadBuffer);
-            console.log("Globaler Update-Trigger gesendet!");
-            alert("Update-Befehl an alle Lampen gesendet.");
+            client.publish(triggerTopic, payloadBuffer);
+            alert(`Globaler Update-Befehl an alle ${type === 'freundschaftslampe' ? 'Lampen' : 'Boxen'} gesendet.`);
         }
     </script>
 </body>
