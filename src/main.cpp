@@ -13,7 +13,7 @@
 
 #include <ArduinoJson.h>
 
-const char* FW_VERSION = "2.1.2";
+const char* FW_VERSION = "V2.1.2";
 
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
