@@ -21,6 +21,15 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 *   **Ein-/Ausschalten**: Per kurzem Touch steuerbar.
 *   **Ruhemodus**: Zeitgesteuerte Deaktivierung für die Nacht.
 
+## 🖥️ Zentrales Management & Dashboard
+
+Dieses Projekt beinhaltet ein modernes Web-Dashboard zur zentralen Verwaltung aller Lampen und Zwitscherboxen.
+
+*   **Device Manager**: Über die Datei `manager/dashboard.html` (einfach im Browser öffnen) erhältst du eine Echtzeit-Übersicht aller Geräte.
+*   **Live-Status (LWT)**: Dank der *Last Will and Testament*-Funktion wird ein Gerät im Dashboard sofort als `offline` markiert, wenn es die Verbindung verliert.
+*   **Version-Reporting**: Jede Lampe meldet ihre Version beim Start. Dank *Retained Messages* ist diese Information im Dashboard sofort sichtbar, auch wenn die Lampe gerade nicht aktiv sendet.
+*   **Status-Topic**: Jedes Gerät nutzt ein individuelles Topic: `freundschaftslampe/status/<ClientID>`.
+
 ## Hardware
 
 *   ESP32 Dev Kit C (oder ESP32-S3)
@@ -61,6 +70,15 @@ This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT.
 *   **Dynamic LED Count**: Configure the number of LEDs directly in the UI.
 *   **Brightness Control**: Adjustable via long-press on the touch sensor.
 *   **Quiet Mode**: Schedule "Do Not Disturb" hours for nighttime.
+
+## 🖥️ Central Device Management
+
+This project includes a modern web dashboard for centralized management of all lamps and Zwitscherboxen.
+
+*   **Device Manager**: Simply open `manager/dashboard.html` in your browser for a real-time overview of all devices.
+*   **Live Status (LWT)**: Using *Last Will and Testament*, any device that loses its connection is immediately marked as `offline` in the dashboard.
+*   **Version Reporting**: Every lamp reports its version on startup. This information is persistently stored on the broker (Retained Messages) and is instantly visible in the dashboard.
+*   **Status Topic**: Each device uses a unique status topic: `freundschaftslampe/status/<ClientID>`.
 
 ## Setup
 
