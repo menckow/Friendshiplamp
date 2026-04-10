@@ -3,7 +3,7 @@
 Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit anderen Lampen verbunden ist. Drückt man den Knopf, leuchten alle anderen Lampen in der gleichen Farbe auf.
 
 ## Neue Funktionen (V2.1)
-*   **Sicheres OTA-Update**: Die Firmware kann nun "Over-the-Air" via MQTT aktualisiert werden. Der Download erfolgt sicher über HTTPS.
+*   **Sicheres OTA-Update**: Die Firmware kann nun "Over-the-Air" via MQTT aktualisiert werden. Der Download erfolgt über HTTPS (GitHub/GitLab werden automatisch unterstützt, keine manuelle Zertifikatspflege nötig).
 *   **Erweiterte Lichteffekte**: Wähle aus verschiedenen Effekten wie *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Feuer-Effekt* und *Komet*.
 *   **Anzeigedauer**: Die Dauer, wie lange eine empfangene Farbe angezeigt wird, lässt sich nun im Webinterface einstellen.
 *   **WLAN-Scan**: Die Weboberfläche sucht jetzt automatisch nach verfügbaren WLANs in der Umgebung.
@@ -45,8 +45,7 @@ Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit andere
 This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT. When you send a signal, all connected lamps light up in your personal identity color.
 
 ## New Features (V2.1)
-*   **Secure OTA Update**: Update your firmware over-the-air via MQTT. Downloads are handled securely via HTTPS.
-*   **Certificate Management**: Store root CA certificates for your update server (e.g., GitHub/GitLab) directly in the web interface.
+*   **Secure OTA Update**: Update your firmware over-the-air via MQTT. Downloads are handled via HTTPS (GitHub/GitLab are automatically supported, no manual certificate setup required).
 *   **Advanced Lighting Effects**: Choose from various effects including *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Fire Effect,* and *Comet*.
 *   **Custom Duration**: The display time for received colors is now configurable.
 *   **Wi-Fi Scanning**: The setup portal automatically scans for available local Wi-Fi networks.
