@@ -14,8 +14,6 @@
 
 const char* FW_VERSION = "2.1.0";
 
-const char* FW_VERSION = "2.1.0";
-
 // == Globale Einstellungen =================================================
 // -- Hardware-Pins --
 #define POTENTIOMETER_PIN 34   // Pin für das Potentiometer (muss ein ADC-Pin sein) 1 ESP32 34
@@ -737,7 +735,7 @@ void setupMqtt() {
       espClientSecure.setCACert(config.mqttCaCert);
       Serial.println("MQTT-Client: Nutze manuelles CA-Zertifikat aus der Konfiguration.");
     } else {
-      espClientSecure.setCACertBundle(arduino_esp_certificate_bundle_get_all);
+      espClientSecure.setCACertBundle(arduino_esp_crt_bundle_attach);
       Serial.println("MQTT-Client: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
     }
     client.setClient(espClientSecure);
@@ -1259,10 +1257,9 @@ void performOtaUpdate(const char* url, const char* version) {
   WiFiClientSecure otaClient;
   
   if (strlen(config.otaCaCert) > 0) {
-    otaClient.setCACert(config.otaCaCert);
     Serial.println("OTA: Nutze manuelles Zertifikat aus der Konfiguration (Override).");
   } else {
-    otaClient.setCACertBundle(arduino_esp_certificate_bundle_get_all);
+    otaClient.setCACertBundle(arduino_esp_crt_bundle_attach);
     Serial.println("OTA: Nutze ESP32 Zertifikatsbundle (setCACertBundle).");
   }
 
