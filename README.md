@@ -1,55 +1,6 @@
-# Friendshiplamp
-![Freundschaftslampe](https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033~2.png)
-Dieses Projekt ist eine "Freundschaftslampe", die über WLAN und MQTT mit anderen Lampen verbunden ist. Drückt man den Knopf, leuchten alle anderen Lampen in der gleichen Farbe auf.
+# Friendship Lamp
 
-## Neue Funktionen (V2.1)
-*   **Sicheres OTA-Update**: Die Firmware kann nun "Over-the-Air" via MQTT aktualisiert werden. Der Download erfolgt über HTTPS (GitHub/GitLab werden automatisch unterstützt, keine manuelle Zertifikatspflege nötig).
-*   **Erweiterte Lichteffekte**: Wähle aus verschiedenen Effekten wie *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Feuer-Effekt* und *Komet*.
-*   **Anzeigedauer**: Die Dauer, wie lange eine empfangene Farbe angezeigt wird, lässt sich nun im Webinterface einstellen.
-*   **WLAN-Scan**: Die Weboberfläche sucht jetzt automatisch nach verfügbaren WLANs in der Umgebung.
-*   **Optimierte Farbtreue**: Dank integrierter Gamma-Korrektur werden Farben (wie z.B. Lila/Violett) deutlich realistischer und satter auf den LEDs dargestellt.
-
-## Funktionalität
-
-*   **Versions-Reporting**: Die Lampe meldet ihre aktuelle Version beim Start via MQTT.
-*   **Rollback-Schutz**: Dank dualer Partitionierung kehrt der ESP32 bei einem fehlgeschlagenen Update automatisch zur letzten funktionierenden Version zurück.
-*   **Web-basierte Konfiguration**: Nach dem ersten Start spannt die Lampe einen eigenen Access-Point (AP) mit dem Namen "Freundschaftslampe-Setup" auf.
-*   **Sicheres Webinterface**: Die Weboberfläche ist mit einem Passwort geschützt (Standard: `12345678`).
-*   **WLAN & MQTT-Konfiguration**: Unterstützung für MQTT mit TLS/SSL und CA-Zertifikaten.
-*   **Dynamische LED-Anzahl**: Die exakte Anzahl der NeoPixel lässt sich im Webinterface einstellen.
-*   **Helligkeitssteuerung**: Die Helligkeit kann direkt am Gerät (Langer Druck auf Touch) eingestellt werden und wird auch bei den Effekten berücksichtigt.
-*   **Ein-/Ausschalten**: Per kurzem Touch steuerbar.
-*   **Ruhemodus**: Zeitgesteuerte Deaktivierung für die Nacht.
-
-## 🖥️ Zentrales Management & Dashboard
-
-Dieses Projekt beinhaltet ein modernes Web-Dashboard zur zentralen Verwaltung aller Lampen und Zwitscherboxen.
-
-*   **Device Manager**: Über die Datei `manager/dashboard.html` (einfach im Browser öffnen) erhältst du eine Echtzeit-Übersicht aller Geräte.
-*   **Live-Status (LWT)**: Dank der *Last Will and Testament*-Funktion wird ein Gerät im Dashboard sofort als `offline` markiert, wenn es die Verbindung verliert.
-*   **Version-Reporting**: Jede Lampe meldet ihre Version beim Start. Dank *Retained Messages* ist diese Information im Dashboard sofort sichtbar, auch wenn die Lampe gerade nicht aktiv sendet.
-*   **Status-Topic**: Jedes Gerät nutzt ein individuelles Topic: `freundschaftslampe/status/<ClientID>`.
-
-## Hardware
-
-*   ESP32 Dev Kit C (oder ESP32-S3)
-*   Adafruit NeoPixel Ring / Strip
-*   Potentiometer (zur Farbwahl im Normalbetrieb)
-*   Taster (zum Senden der Identitätsfarbe)
-*   Kapazitiver Touch-Sensor (Ein/Aus & Helligkeit)
-
-## Verkabelung
-
-| Bauteil             | Pin am ESP32 |
-| ------------------- | ------------ |
-| Potentiometer (Signal) | GPIO 34      |
-| Taster              | GPIO 4       |
-| NeoPixel Ring (DIN) | GPIO 13      |
-| Touch-Sensor (Zustand)| GPIO 32      |
-
----
-
-# Friendship Lamp (English)
+![Friendship Lamp](https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033~2.png)
 
 This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT. When you send a signal, all connected lamps light up in your personal identity color.
 
@@ -80,6 +31,23 @@ This project includes a modern web dashboard for centralized management of all l
 *   **Version Reporting**: Every lamp reports its version on startup. This information is persistently stored on the broker (Retained Messages) and is instantly visible in the dashboard.
 *   **Status Topic**: Each device uses a unique status topic: `freundschaftslampe/status/<ClientID>`.
 
+## Hardware
+
+*   ESP32 Dev Kit C (or ESP32-S3)
+*   Adafruit NeoPixel Ring / Strip
+*   Potentiometer (for color selection in normal mode)
+*   Button (to send the identity color)
+*   Capacitive Touch Sensor (On/Off & Brightness)
+
+## Wiring
+
+| Component           | Pin on ESP32 |
+| ------------------- | ------------ |
+| Potentiometer (Signal) | GPIO 34      |
+| Button              | GPIO 4       |
+| NeoPixel Ring (DIN) | GPIO 13      |
+| Touch Sensor (State)| GPIO 32      |
+
 ## Setup
 
 1.  **Flash Firmware**: Use PlatformIO to upload the code to your ESP32.
@@ -89,16 +57,16 @@ This project includes a modern web dashboard for centralized management of all l
 
 ---
 
-# User Manual / Bedienungsanleitung
+# User Manual
 
-## 1. Einrichten (Setup)
-Verbinde dich mit dem WLAN **"Freundschaftslampe-Setup"** (Passwort: `12345678`). Dein Browser sollte automatisch die Konfigurationsseite öffnen. Dort kannst du dein Heim-WLAN auswählen und deine Lampe individualisieren.
+## 1. Setup
+Connect to the Wi-Fi **"Freundschaftslampe-Setup"** (Password: `12345678`). Your browser should automatically open the configuration page. There you can select your home Wi-Fi and personalize your lamp.
 
-## 2. Bedienung (Operation)
-*   **💡 Ein/Aus**: Kurzer Touch auf den Sensor.
-*   **☀️ Helligkeit**: Langer Touch auf den Sensor. Die Lampe regelt die Helligkeit hoch/runter. Loslassen, wenn es passt.
-*   **🎨 Farbwahl**: Drehe am Potentiometer, um die lokale Farbe der Lampe zu ändern.
-*   **💌 Senden**: Drücke den Taster. Deine Lampe sendet nun deine eingestellte Farbe und deinen gewählten Effekt an deine Freunde.
+## 2. Operation
+*   **💡 On/Off**: Short touch on the sensor.
+*   **☀️ Brightness**: Long touch on the sensor. The lamp smoothly changes its brightness up or down. Release when it suits you.
+*   **🎨 Color Selection**: Turn the potentiometer to change the local color of the lamp.
+*   **💌 Sending**: Press the button. Your lamp now sends your configured color and chosen effect to your friends.
 
-## 3. Effekte (Effects)
-Du kannst in den Einstellungen aus verschiedenen Animationen wählen. Der **Feuer-Effekt** flackert in deiner Farbe, während der **Komet** einen Lichtschweif um den Ring zieht. Der **Regenbogen** ist eine Ausnahme und zeigt immer das volle Farbspektrum.
+## 3. Effects
+You can choose from various animations in the settings. The **Fire Effect** flickers in your color, while the **Comet** draws a light trail around the ring. The **Rainbow** is an exception and always shows the full color spectrum.
