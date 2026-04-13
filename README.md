@@ -10,6 +10,8 @@ This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT.
 *   **Custom Duration**: The display time for received colors is now configurable.
 *   **Wi-Fi Scanning**: The setup portal automatically scans for available local Wi-Fi networks.
 *   **Enhanced Color Accuracy**: Integrated Gamma correction for vibrant and true-to-life colors.
+*   **Touch Sensitivity Control**: Configure the sensitivity of your touch sensor directly in the web UI.
+*   **Memory Optimization**: Use of `PROGMEM` for web templates to prevent heap fragmentation and improve overall stability.
 
 ## Functionality
 
@@ -62,11 +64,12 @@ This project includes a modern web dashboard for centralized management of all l
 ## 1. Setup
 Connect to the Wi-Fi **"Freundschaftslampe-Setup"** (Password: `12345678`). Your browser should automatically open the configuration page. There you can select your home Wi-Fi and personalize your lamp.
 
-## 2. Operation
-*   **💡 On/Off**: Short touch on the sensor.
-*   **☀️ Brightness**: Long touch on the sensor. The lamp smoothly changes its brightness up or down. Release when it suits you.
-*   **🎨 Color Selection**: Turn the potentiometer to change the local color of the lamp.
-*   **💌 Sending**: Press the button. Your lamp now sends your configured color and chosen effect to your friends.
+### 2. Bedienung
+*   **💡 Ein/Aus**: Den Touch-Sensor kurz berühren.
+*   **☀️ Helligkeit**: Den Touch-Sensor lang berühren. Die Lampe ändert stufenlos die Helligkeit.
+*   **📉 Empfindlichkeit**: In den Einstellungen kann die Touch-Empfindlichkeit justiert werden. Ein niedrigerer Wert macht den Schalter empfindlicher.
+*   **🎨 Farbwahl**: Am Potentiometer drehen, um die lokale Farbe der Lampe zu ändern.
+*   **💌 Senden**: Den Taster drücken. Deine Lampe sendet nun deine Farbe und den gewählten Effekt an deine Freunde.
 
-## 3. Effects
+### 3. Effekte
 You can choose from various animations in the settings. The **Fire Effect** flickers in your color, while the **Comet** draws a light trail around the ring. The **Rainbow** is an exception and always shows the full color spectrum.

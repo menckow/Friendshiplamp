@@ -19,6 +19,7 @@ Wenn du die Lampe zum ersten Mal mit Strom versorgst oder sie dein Heim-WLAN nic
    * Deine **Identitätsfarbe** bestimmen (diese Farbe sehen deine Freunde, wenn du ihnen ein Signal schickst).
    * Einen **Lichteffekt** auswählen (z.B. Fade, Komet oder Feuer-Effekt).
    * Die **Anzeigedauer** einstellen (wie lange ein empfangenes Signal leuchten soll).
+   * Die **Touch-Empfindlichkeit** (Schwellenwert) kalibrieren, falls der Sensor zu leicht oder zu schwer auslöst.
    * Einen **Ruhemodus** (Nachtschaltung) aktivieren.
 6. Klicke auf **Speichern & Neustarten**. Die Lampe verbindet sich nun mit deinem Heim-WLAN.
 
@@ -31,6 +32,7 @@ Die Lampe ist so konzipiert, dass sie einfach und intuitiv bedient werden kann. 
 ### 👆 Der Touch-Sensor (Ein/Aus & Helligkeit)
 * **Kurzes Berühren:** Schaltet die Lampe ein oder aus.
 * **Langes Berühren (Gedrückt halten):** Verändert die Helligkeit. Die Lampe dimmt stufenlos hoch oder runter. Lass den Sensor einfach los, sobald die gewünschte Helligkeit erreicht ist.
+* **Empfindlichkeit einstellen:** Falls die Lampe auf bloße Annäherung reagiert oder gar nicht auf Berührung anspricht, kann dies im Webinterface justiert werden (ein niedrigerer Wert macht den Sensor unempfindlicher gegenüber Störungen).
 
 ### 🎛️ Der Drehregler (Potentiometer)
 * **Farbe ändern:** Durch Drehen des Reglers kannst du deine *lokale* Leuchtfarbe (deine Identitätsfarbe) jederzeit anpassen. Diese Farbe wird beim nächsten Senden an deine Freunde übermittelt.
