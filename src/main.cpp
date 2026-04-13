@@ -96,7 +96,7 @@ void setupWebServer();
 void setupMqtt();
 void reconnectMqtt();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
-void setAllPixels(uint32_t color);
+void setAllPixels(uint32_t color, int brightness = -1);
 void handleButtonPress();
 void handlePotentiometer();
 void handleTouch();
@@ -118,18 +118,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 700px; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .container { width: 100%%; max-width: 700px; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
     h1 { text-align: center; color: #1c1e21; font-size: 2em; margin-bottom: 1em; }
     form { display: flex; flex-direction: column; }
     fieldset { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-top: 20px; background-color: #fafafa; }
     legend { font-size: 1.2em; font-weight: 600; padding: 0 10px; color: #007bff; margin-left: 10px; }
     label { font-weight: 600; margin-top: 15px; margin-bottom: 5px; }
-    input[type='text'], input[type='password'], input[type='number'], textarea, select { padding: 12px; margin-top: 5px; background-color: #fff; color: #333; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; width: 100%; box-sizing: border-box; }
+    input[type='text'], input[type='password'], input[type='number'], textarea, select { padding: 12px; margin-top: 5px; background-color: #fff; color: #333; border: 1px solid #ccc; border-radius: 6px; font-size: 1em; width: 100%%; box-sizing: border-box; }
     input:focus, textarea:focus, select:focus { border-color: #007bff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); outline: none; }
     textarea { font-family: monospace; resize: vertical; min-height: 120px; }
     .checkbox-container { display: flex; align-items: center; margin-top: 15px; }
     input[type='checkbox'] { margin-right: 10px; width: 18px; height: 18px; }
-    input[type='color'] { width: 100%; height: 45px; padding: 5px; border-radius: 6px; border: 1px solid #ccc; }
+    input[type='color'] { width: 100%%; height: 45px; padding: 5px; border-radius: 6px; border: 1px solid #ccc; }
     input[type='submit'] { background-color: #007bff; color: white; cursor: pointer; margin-top: 30px; padding: 15px; font-size: 1.1em; font-weight: 600; border: none; border-radius: 6px; }
     input[type='submit']:hover { background-color: #0056b3; }
     .help-text { font-size: 0.9em; color: #666; margin-top: 5px; }
@@ -245,26 +245,38 @@ void setup() {
 
 void loop() {
   handleReceivedColorMode();
-  if (WiFi.getMode() == WIFI_STA) {
-    if (WiFi.status() != WL_CONNECTED) {
-       if (millis() - lastWifiReconnectAttempt > RECONNECT_INTERVAL) {
-          lastWifiReconnectAttempt = millis();
-          WiFi.reconnect();
-       }
-    } else {
+
+  WiFiMode_t mode = WiFi.getMode();
+
+  // Hardware-Interaktionen und MQTT (STA oder AP_STA)
+  if (mode == WIFI_STA || mode == WIFI_AP_STA) {
+    if (WiFi.status() == WL_CONNECTED) {
        if (!client.connected()) {
           if (millis() - lastMqttReconnectAttempt > RECONNECT_INTERVAL) {
              lastMqttReconnectAttempt = millis();
              reconnectMqtt(); 
           }
        } else client.loop();
+    } else if (mode == WIFI_STA) {
+       if (millis() - lastWifiReconnectAttempt > RECONNECT_INTERVAL) {
+          lastWifiReconnectAttempt = millis();
+          WiFi.reconnect();
+       }
     }
     handleButtonPress();
     handlePotentiometer();
     handleTouch();
-  } else if (WiFi.getMode() == WIFI_AP) dnsServer.processNextRequest();
+  }
 
-  if (shouldReboot && millis() > rebootTime) ESP.restart();
+  // DNS Server für Captive Portal (AP oder AP_STA)
+  if (mode == WIFI_AP || mode == WIFI_AP_STA) {
+    dnsServer.processNextRequest();
+  }
+
+  if (shouldReboot && millis() > rebootTime) {
+    Serial.println("Neustart wird jetzt ausgeführt...");
+    ESP.restart();
+  }
   delay(10);
 }
 
@@ -350,6 +362,7 @@ String templateProcessor(const String& var) {
 
 void setupWebServer() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    Serial.println("Webserver: Index-Seite angefordert.");
     if (!checkAuth(request)) return;
     request->send_P(200, "text/html", INDEX_HTML, templateProcessor);
   });
@@ -449,10 +462,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-void setAllPixels(uint32_t color) {
-  uint8_t r = ((color >> 16) & 0xFF) * (currentBrightness / 255.0);
-  uint8_t g = ((color >> 8) & 0xFF) * (currentBrightness / 255.0);
-  uint8_t b = (color & 0xFF) * (currentBrightness / 255.0);
+void setAllPixels(uint32_t color, int brightness) {
+  uint8_t effectiveBrightness = (brightness == -1) ? currentBrightness : (uint8_t)brightness;
+  uint8_t r = ((color >> 16) & 0xFF) * (effectiveBrightness / 255.0);
+  uint8_t g = ((color >> 8) & 0xFF) * (effectiveBrightness / 255.0);
+  uint8_t b = (color & 0xFF) * (effectiveBrightness / 255.0);
   for (int i = 0; i < pixels.numPixels(); i++) pixels.setPixelColor(i, r, g, b);
   pixels.show();
 }
@@ -690,7 +704,56 @@ void saveConfiguration() {
 }
 
 void performOtaUpdate(const char* url, const char* version) {
-  WiFiClientSecure c; c.setInsecure();
+  Serial.println("OTA Update Prozess gestartet...");
+  Serial.printf("Update-URL: %s\n", url);
+  
+  // Status via MQTT melden
+  String statusTopic = "freundschaftslampe/status/" + String(config.mqttClientId);
+  String startMsg = "Updating to " + String(version);
+  client.publish(statusTopic.c_str(), (String(FW_VERSION) + ":" + startMsg).c_str(), true);
+  client.publish("freundschaftslampe/update/status", startMsg.c_str());
+  client.loop(); 
+
+  WiFiClientSecure otaClient;
+  otaClient.setInsecure();
+  Serial.println("OTA: Nutze Insecure-Mode.");
+
+  // Ring blau leuchten lassen während des Updates (mit voller Helligkeit)
+  setAllPixels(pixels.Color(0, 0, 255), 100);
+
   httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-  httpUpdate.update(c, url);
+
+  // Fortschritts-Handling
+  httpUpdate.onProgress([](int cur, int total) {
+    static int lastPercent = -1;
+    int percent = (cur * 100) / total;
+    if (percent % 10 == 0 && percent != lastPercent) {
+      lastPercent = percent;
+      Serial.printf("Download: %d%%\n", percent);
+    }
+  });
+
+  t_httpUpdate_return ret = httpUpdate.update(otaClient, url);
+
+  switch (ret) {
+    case HTTP_UPDATE_FAILED: {
+      String errorMsg = "Update failed: " + httpUpdate.getLastErrorString();
+      Serial.println(errorMsg);
+      client.publish("freundschaftslampe/update/status", errorMsg.c_str());
+      setAllPixels(pixels.Color(255, 0, 0), 100); // Rot bei Fehler (mit voller Helligkeit)
+      delay(2000);
+      setAllPixels(0, 0);
+      break;
+    }
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("Keine Updates verfügbar.");
+      client.publish("freundschaftslampe/update/status", "No updates available");
+      break;
+    case HTTP_UPDATE_OK:
+      Serial.println("Update erfolgreich! ESP32 startet neu...");
+      client.publish("freundschaftslampe/update/status", "Success! Rebooting...");
+      client.loop();
+      delay(1000);
+      break;
+  }
 }
