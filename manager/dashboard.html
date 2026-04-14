@@ -224,9 +224,89 @@
             color: #64748b;
             font-style: italic;
         }
+
+        /* Login Mask Styles */
+        #login-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+
+        .login-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .login-card h2 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .login-form input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
     </style>
 </head>
 <body>
+    <div id="login-mask">
+        <div class="login-card">
+            <h2>Device Manager Login</h2>
+            <div class="login-form">
+                <input type="text" id="mqtt-broker" placeholder="MQTT Broker (z.B. hivemq.cloud)" value="">
+                <input type="number" id="mqtt-port" placeholder="Port (z.B. 8884)" value="8884">
+                <input type="text" id="mqtt-username" placeholder="Benutzername" value="">
+                <input type="password" id="mqtt-password" placeholder="Passwort">
+                <button class="btn-login" onclick="startMqttConnection()">Verbinden & Starten</button>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.8rem; color: #64748b;">
+                Die Zugangsdaten werden nur lokal in dieser Sitzung verwendet.
+            </p>
+        </div>
+    </div>
+
     <div class="container">
         <header>
             <h1>Device Manager</h1>
@@ -290,41 +370,75 @@
     </div>
 
     <script>
-        const BROKER = "[BROKER_HOST]";
-        const PORT = 8884;
-        const USERNAME = "[USERNAME]";
-        const PASSWORD = "[PASSWORD]";
-
+        let client;
         let devices = {}; 
-
-        const options = {
-            clientId: 'manager_' + Math.random().toString(16).substr(2, 8),
-            username: USERNAME,
-            password: PASSWORD,
-            clean: true,
-            connectTimeout: 4000,
-            reconnectPeriod: 1000,
-            protocol: 'wss'
-        };
-
-        const client = mqtt.connect(`wss://${BROKER}:${PORT}/mqtt`, options);
         const statusLabel = document.getElementById('mqtt-status');
 
-        client.on('connect', () => {
-            console.log('Verbunden!');
-            statusLabel.innerText = "Verbunden";
-            statusLabel.className = "status-badge status-connected";
-            // Subscribe auf alle Status-Topics
-            client.subscribe("+/status/#");
-        });
+        // Lade gespeicherte Broker/User Daten aus dem localStorage (Komfort)
+        window.onload = () => {
+            const savedBroker = localStorage.getItem('mqtt_broker');
+            const savedUser = localStorage.getItem('mqtt_username');
+            const savedPort = localStorage.getItem('mqtt_port');
+            
+            if (savedBroker) document.getElementById('mqtt-broker').value = savedBroker;
+            if (savedUser) document.getElementById('mqtt-username').value = savedUser;
+            if (savedPort) document.getElementById('mqtt-port').value = savedPort;
+        };
 
-        client.on('error', (err) => {
-            console.error('MQTT Fehler:', err);
-            statusLabel.innerText = "Verbindungsfehler";
-            statusLabel.className = "status-badge status-disconnected";
-        });
+        function startMqttConnection() {
+            const broker = document.getElementById('mqtt-broker').value.trim();
+            const port = parseInt(document.getElementById('mqtt-port').value);
+            const user = document.getElementById('mqtt-username').value.trim();
+            const pass = document.getElementById('mqtt-password').value;
 
-        client.on('message', (topic, message) => {
+            if (!broker || !user || !pass) {
+                alert("Bitte fülle alle Felder aus.");
+                return;
+            }
+
+            // Speichere Broker & User für den nächsten Besuch
+            localStorage.setItem('mqtt_broker', broker);
+            localStorage.setItem('mqtt_username', user);
+            localStorage.setItem('mqtt_port', port);
+
+            const options = {
+                clientId: 'manager_' + Math.random().toString(16).substr(2, 8),
+                username: user,
+                password: pass,
+                clean: true,
+                connectTimeout: 4000,
+                reconnectPeriod: 1000,
+                protocol: 'wss'
+            };
+
+            statusLabel.innerText = "Verbindung wird aufgebaut...";
+            
+            client = mqtt.connect(`wss://${broker}:${port}/mqtt`, options);
+
+            client.on('connect', () => {
+                console.log('Verbunden!');
+                statusLabel.innerText = "Verbunden";
+                statusLabel.className = "status-badge status-connected";
+                // Login-Maske ausblenden
+                document.getElementById('login-mask').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('login-mask').style.display = 'none';
+                }, 500);
+                
+                client.subscribe("+/status/#");
+            });
+
+            client.on('error', (err) => {
+                console.error('MQTT Fehler:', err);
+                alert("Verbindung fehlgeschlagen: " + err.message);
+                statusLabel.innerText = "Verbindungsfehler";
+                statusLabel.className = "status-badge status-disconnected";
+                // Login-Maske wieder anzeigen falls versteckt
+                document.getElementById('login-mask').style.display = 'flex';
+                document.getElementById('login-mask').style.opacity = '1';
+            });
+
+            client.on('message', (topic, message) => {
             const payload = message.toString();
             console.log(`Topic: ${topic}, Message: ${payload}`);
 
