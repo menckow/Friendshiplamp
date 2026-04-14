@@ -299,7 +299,8 @@
                 <input type="number" id="mqtt-port" placeholder="Port (z.B. 8884)" value="8884">
                 <input type="text" id="mqtt-username" placeholder="Benutzername" value="">
                 <input type="password" id="mqtt-password" placeholder="Passwort">
-                <button class="btn-login" onclick="startMqttConnection()">Verbinden & Starten</button>
+                <button class="btn-login" id="login-button" onclick="startMqttConnection()">Verbinden & Starten</button>
+                <div id="login-status" style="margin-top: 15px; font-size: 0.9rem; color: #818cf8; font-weight: 600;"></div>
             </div>
             <p style="margin-top: 20px; font-size: 0.8rem; color: #64748b;">
                 Die Zugangsdaten werden nur lokal in dieser Sitzung verwendet.
@@ -386,8 +387,9 @@
         };
 
         function startMqttConnection() {
-            const broker = document.getElementById('mqtt-broker').value.trim();
-            const port = parseInt(document.getElementById('mqtt-port').value);
+            let broker = document.getElementById('mqtt-broker').value.trim();
+            const portInput = document.getElementById('mqtt-port');
+            let port = parseInt(portInput.value);
             const user = document.getElementById('mqtt-username').value.trim();
             const pass = document.getElementById('mqtt-password').value;
 
@@ -395,6 +397,16 @@
                 alert("Bitte fülle alle Felder aus.");
                 return;
             }
+
+            // Port 8883 ist für native Clients, Browser brauchen 8884 (WebSockets)
+            if (port === 8883) {
+                console.warn("Port 8883 erkannt. Browser benötigen für HiveMQ Cloud WebSockets (Port 8884). Korrigiere...");
+                port = 8884;
+                portInput.value = 8884;
+            }
+
+            // Bereinige Broker-URL
+            broker = broker.replace(/^wss?:\/\//i, '').replace(/\/$/, '');
 
             // Speichere Broker & User für den nächsten Besuch
             localStorage.setItem('mqtt_broker', broker);
@@ -406,19 +418,35 @@
                 username: user,
                 password: pass,
                 clean: true,
-                connectTimeout: 4000,
-                reconnectPeriod: 1000,
-                protocol: 'wss'
+                connectTimeout: 10000,
+                reconnectPeriod: 2000,
+                protocol: 'wss',
+                protocolVersion: 4, // Erforderlich für viele Cloud-Broker (MQTT 3.1.1)
+                rejectUnauthorized: false
             };
 
+            const loginStatus = document.getElementById('login-status');
+            const loginBtn = document.getElementById('login-button');
+
             statusLabel.innerText = "Verbindung wird aufgebaut...";
+            loginStatus.innerText = "Verbindung via WebSockets (TLS)...";
+            loginStatus.style.color = "#818cf8";
+            loginBtn.disabled = true;
+            loginBtn.innerText = "Verbinde...";
             
-            client = mqtt.connect(`wss://${broker}:${port}/mqtt`, options);
+            // HiveMQ Cloud WebSocket-Endpoint
+            const wsUrl = `wss://${broker}:${port}/mqtt`;
+            console.log("Verbindung wird gestartet:", wsUrl);
+            
+            client = mqtt.connect(wsUrl, options);
 
             client.on('connect', () => {
                 console.log('Verbunden!');
                 statusLabel.innerText = "Verbunden";
                 statusLabel.className = "status-badge status-connected";
+                loginStatus.innerText = "Erfolgreich verbunden!";
+                loginStatus.style.color = "#22c55e";
+                
                 // Login-Maske ausblenden
                 document.getElementById('login-mask').style.opacity = '0';
                 setTimeout(() => {
@@ -430,12 +458,13 @@
 
             client.on('error', (err) => {
                 console.error('MQTT Fehler:', err);
-                alert("Verbindung fehlgeschlagen: " + err.message);
+                loginStatus.innerText = "Fehler: " + err.message;
+                loginStatus.style.color = "#ef4444";
+                loginBtn.disabled = false;
+                loginBtn.innerText = "Verbinden & Starten";
+                
                 statusLabel.innerText = "Verbindungsfehler";
                 statusLabel.className = "status-badge status-disconnected";
-                // Login-Maske wieder anzeigen falls versteckt
-                document.getElementById('login-mask').style.display = 'flex';
-                document.getElementById('login-mask').style.opacity = '1';
             });
 
             client.on('message', (topic, message) => {
