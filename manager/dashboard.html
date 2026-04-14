@@ -439,22 +439,23 @@
             });
 
             client.on('message', (topic, message) => {
-            const payload = message.toString();
-            console.log(`Topic: ${topic}, Message: ${payload}`);
+                const payload = message.toString();
+                console.log(`Topic: ${topic}, Message: ${payload}`);
 
-            // Topic Format: <TYPE>/status/<ID>
-            const parts = topic.split('/');
-            if (parts.length < 3) return;
-            const type = parts[0];
-            const clientId = parts[parts.length - 1];
+                // Topic Format: <TYPE>/status/<ID>
+                const parts = topic.split('/');
+                if (parts.length < 3) return;
+                const type = parts[0];
+                const clientId = parts[parts.length - 1];
 
-            // Payload Format: Version:Status
-            const dataParts = payload.split(':');
-            const version = dataParts[0] || 'Unknown';
-            const status = dataParts[1] || payload;
+                // Payload Format: Version:Status
+                const dataParts = payload.split(':');
+                const version = dataParts[0] || 'Unknown';
+                const status = dataParts[1] || payload;
 
-            updateDeviceList(clientId, type, version, status);
-        });
+                updateDeviceList(clientId, type, version, status);
+            });
+        }
 
         function updateDeviceList(id, type, version, status) {
             devices[id] = { type, version, status, lastSeen: Date.now() };
