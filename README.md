@@ -64,12 +64,12 @@ This project includes a modern web dashboard for centralized management of all l
 ## 1. Setup
 Connect to the Wi-Fi **"Freundschaftslampe-Setup"** (Password: `12345678`). Your browser should automatically open the configuration page. There you can select your home Wi-Fi and personalize your lamp.
 
-### 2. Bedienung
-*   **💡 Ein/Aus**: Den Touch-Sensor kurz berühren.
-*   **☀️ Helligkeit**: Den Touch-Sensor lang berühren. Die Lampe ändert stufenlos die Helligkeit.
-*   **📉 Empfindlichkeit**: In den Einstellungen kann die Touch-Empfindlichkeit justiert werden. Ein niedrigerer Wert macht den Schalter empfindlicher.
-*   **🎨 Farbwahl**: Am Potentiometer drehen, um die lokale Farbe der Lampe zu ändern.
-*   **💌 Senden**: Den Taster drücken. Deine Lampe sendet nun deine Farbe und den gewählten Effekt an deine Freunde.
+### 2. Operation
+* **💡 On/Off**: Briefly touch the touch sensor.
+* **☀️ Brightness**: Press and hold the touch sensor. The lamp's brightness will change continuously.
+* **📉 Sensitivity**: The touch sensitivity can be adjusted in the settings. A lower value makes the switch more sensitive.
+* **🎨 Color Selection**: Turn the potentiometer to change the lamp's color.
+* **💌 Send**: Press the button. Your lamp will now send your selected color and effect to your friends.
 
 ### 3. Effekte
 You can choose from various animations in the settings. The **Fire Effect** flickers in your color, while the **Comet** draws a light trail around the ring. The **Rainbow** is an exception and always shows the full color spectrum.
