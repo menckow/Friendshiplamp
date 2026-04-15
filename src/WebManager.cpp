@@ -30,6 +30,7 @@ void WebManager::setupRoutes() {
         if (request->hasParam("mqtt", true)) strlcpy(config.mqttServer, request->getParam("mqtt", true)->value().c_str(), sizeof(config.mqttServer));
         if (request->hasParam("mqtt_port", true)) config.mqttPort = request->getParam("mqtt_port", true)->value().toInt();
         config.mqttTls = request->hasParam("mqtt_tls", true);
+        config.useStandardCa = request->hasParam("mqtt_standard_ca", true);
         if (request->hasParam("mqtt_ca", true)) strlcpy(config.mqttCaCert, request->getParam("mqtt_ca", true)->value().c_str(), sizeof(config.mqttCaCert));
         if (request->hasParam("mqtt_topic", true)) strlcpy(config.mqttTopic, request->getParam("mqtt_topic", true)->value().c_str(), sizeof(config.mqttTopic));
         if (request->hasParam("mqtt_user", true)) strlcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str(), sizeof(config.mqttUser));
@@ -104,6 +105,7 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "MQTT_SERVER") return String(config.mqttServer);
     if (var == "MQTT_PORT") return String(config.mqttPort);
     if (var == "MQTT_TLS_CHECKED") return config.mqttTls ? "checked" : "";
+    if (var == "MQTT_STANDARD_CA_CHECKED") return config.useStandardCa ? "checked" : "";
     if (var == "MQTT_CA") return String(config.mqttCaCert);
     if (var == "CLIENT_ID") return String(config.mqttClientId);
     if (var == "TOPIC") return String(config.mqttTopic);

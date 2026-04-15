@@ -10,6 +10,7 @@ struct Config {
   char mqttServer[64];
   uint16_t mqttPort;
   bool mqttTls;
+  bool useStandardCa;
   char mqttCaCert[2048];
   char mqttTopic[64];
   char mqttUser[32];

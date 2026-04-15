@@ -12,9 +12,9 @@
 ConfigManager configMgr;
 LampController lamp(40, 13); // Default values, will be updated in setup
 NetworkManager network;
-MqttManager mqtt(lamp);
-InputHandler input(lamp);
 OTAHandler ota(lamp);
+MqttManager mqtt(lamp, ota);
+InputHandler input(lamp);
 WebManager web(configMgr);
 
 // == Hauptprogramm-Logik ==================================================
@@ -35,6 +35,7 @@ void setup() {
     
     // 4. Dienste (MQTT, Webserver)
     mqtt.begin(config);
+    ota.setMqttManager(&mqtt);
     web.begin();
 
     Serial.println("System bereit.");

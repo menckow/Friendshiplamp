@@ -1,16 +1,25 @@
 #include "MqttManager.h"
 #include <ArduinoJson.h>
+#include "StandardCAs.h"
+#include "OTAHandler.h"
 
 MqttManager* MqttManager::_instance = nullptr;
 
-MqttManager::MqttManager(LampController& lamp) : _client(_espClient), _lamp(lamp) {
+MqttManager::MqttManager(LampController& lamp, OTAHandler& ota) : _client(_espClient), _lamp(lamp), _ota(ota) {
     _instance = this;
+    memset(_mqttTopic, 0, sizeof(_mqttTopic));
 }
 
 void MqttManager::begin(Config& config) {
+    strlcpy(_mqttTopic, config.mqttTopic, sizeof(_mqttTopic));
     if (config.mqttTls) {
-        if (strlen(config.mqttCaCert) > 0) _espClientSecure.setCACert(config.mqttCaCert);
-        else _espClientSecure.setInsecure();
+        if (config.useStandardCa) {
+            _espClientSecure.setCACert(ISRG_ROOT_X1);
+        } else if (strlen(config.mqttCaCert) > 0) {
+            _espClientSecure.setCACert(config.mqttCaCert);
+        } else {
+            _espClientSecure.setInsecure();
+        }
         _client.setClient(_espClientSecure);
     } else {
         _client.setClient(_espClient);
@@ -21,6 +30,7 @@ void MqttManager::begin(Config& config) {
 }
 
 void MqttManager::update(Config& config) {
+    _config = &config;
     if (WiFi.status() == WL_CONNECTED) {
         if (!_client.connected()) {
             if (millis() - _lastMqttReconnectAttempt > RECONNECT_INTERVAL) {
@@ -31,6 +41,10 @@ void MqttManager::update(Config& config) {
             _client.loop();
         }
     }
+}
+
+void MqttManager::loop() {
+    _client.loop();
 }
 
 void MqttManager::reconnect(Config& config) {
@@ -78,23 +92,27 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
     memcpy(message, payload, length);
     message[length] = '\0';
     
-    if (strcmp(topic, _instance->_lamp.getColor() == 0 ? "" : "") == 0) { // Topic comparison logic needs to be robust
-        // This is handled via the config topic in original code
-    }
-
-    // Since I don't have the config object here in the callback easily without storing it,
-    // I'll assume the topic check is done against the subscription.
-    
-    // For now, let's replicate the logic from main.cpp
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, message);
-    if (!error) {
-        if (doc["color"].is<const char*>()) {
-            const char* colorHex = doc["color"];
-            uint32_t color = (uint32_t) strtoul(colorHex + (colorHex[0] == '#' ? 1 : 0), NULL, 16);
-            const char* effect = doc["effect"] | "fade";
-            uint32_t duration = doc["duration"] | 10000;
-            _lamp.startReceivedColorMode(color, effect, duration);
+    if (strcmp(topic, _instance->_mqttTopic) == 0) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            if (doc["color"].is<const char*>()) {
+                const char* colorHex = doc["color"];
+                uint32_t color = (uint32_t) strtoul(colorHex + (colorHex[0] == '#' ? 1 : 0), NULL, 16);
+                const char* effect = doc["effect"] | "fade";
+                uint32_t duration = doc["duration"] | 10000;
+                _instance->_lamp.startReceivedColorMode(color, effect, duration);
+            }
+        }
+    } else if (strcmp(topic, "freundschaftslampe/update/trigger") == 0) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            const char* url = doc["url"] | "";
+            const char* version = doc["version"] | "";
+            if (strlen(url) > 0 && strcmp(version, _instance->FW_VERSION) != 0 && _instance->_config != nullptr) {
+                _instance->_ota.performUpdate(url, version, _instance->FW_VERSION, *(_instance->_config));
+            }
         }
     }
 }

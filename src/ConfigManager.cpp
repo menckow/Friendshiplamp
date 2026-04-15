@@ -24,6 +24,7 @@ void ConfigManager::load() {
     _preferences.getString("mqttServer", _config.mqttServer, 64);
     _config.mqttPort = _preferences.getUShort("mqttPort", 1883);
     _config.mqttTls = _preferences.getBool("mqttTls", false);
+    _config.useStandardCa = _preferences.getBool("useStandardCa", true);
     _preferences.getString("mqttCaCert", _config.mqttCaCert, 2048);
     _preferences.getString("mqttTopic", _config.mqttTopic, 64);
     _preferences.getString("mqttUser", _config.mqttUser, 32);
@@ -48,6 +49,7 @@ void ConfigManager::save() {
     _preferences.putString("mqttServer", _config.mqttServer);
     _preferences.putUShort("mqttPort", _config.mqttPort);
     _preferences.putBool("mqttTls", _config.mqttTls);
+    _preferences.putBool("useStandardCa", _config.useStandardCa);
     _preferences.putString("mqttCaCert", _config.mqttCaCert);
     _preferences.putString("mqttTopic", _config.mqttTopic);
     _preferences.putString("mqttUser", _config.mqttUser);

@@ -50,9 +50,17 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <input type='text' id='mqtt' name='mqtt' value='%MQTT_SERVER%'>
         <label for='mqtt_port'>MQTT Port:</label>
         <input type='number' id='mqtt_port' name='mqtt_port' value='%MQTT_PORT%'>
-        <div class="checkbox-container"><input type='checkbox' id='mqtt_tls' name='mqtt_tls' %MQTT_TLS_CHECKED%><label for='mqtt_tls'>MQTT mit TLS/SSL</label></div>
-        <label for='mqtt_ca'>CA Zertifikat (optional):</label>
-        <textarea id='mqtt_ca' name='mqtt_ca'>%MQTT_CA%</textarea>
+        <div class="checkbox-container"><input type='checkbox' id='mqtt_tls' name='mqtt_tls' %MQTT_TLS_CHECKED% onchange="toggleCaFields()"><label for='mqtt_tls'>MQTT mit TLS/SSL</label></div>
+        <div id="ca_settings" style="display: none; margin-left: 20px;">
+          <div class="checkbox-container">
+            <input type='checkbox' id='mqtt_standard_ca' name='mqtt_standard_ca' %MQTT_STANDARD_CA_CHECKED% onchange="toggleCaFields()">
+            <label for='mqtt_standard_ca'>Standard Root-CA nutzen (HiveMQ/Let's Encrypt)</label>
+          </div>
+          <div id="custom_ca_field" style="display: none;">
+            <label for='mqtt_ca'>Eigenes CA Zertifikat (PEM):</label>
+            <textarea id='mqtt_ca' name='mqtt_ca'>%MQTT_CA%</textarea>
+          </div>
+        </div>
         <label for='mqtt_client_id'>MQTT Client ID:</label>
         <input type='text' id='mqtt_client_id' name='mqtt_client_id' value='%CLIENT_ID%'>
         <label for='mqtt_topic'>MQTT Topic:</label>
@@ -101,7 +109,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         nets.forEach(n => { let o = document.createElement('option'); o.value = n.ssid; o.textContent = n.ssid + " (" + n.rssi + " dBm)"; s.appendChild(o); });
       });
     }
+    
+    function toggleCaFields() {
+      const tls = document.getElementById('mqtt_tls').checked;
+      const standard = document.getElementById('mqtt_standard_ca').checked;
+      document.getElementById('ca_settings').style.display = tls ? 'block' : 'none';
+      document.getElementById('custom_ca_field').style.display = (tls && !standard) ? 'block' : 'none';
+    }
+    
     scanWlan();
+    toggleCaFields();
   </script>
 </body>
 </html>
