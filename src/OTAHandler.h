@@ -16,6 +16,8 @@ public:
     void performUpdate(const char* url, const char* version, const char* currentVersion, Config& config);
 
 private:
+    void sendStatusRobust(const char* msg, Config& config);
+    
     LampController& _lamp;
     MqttManager* _mqtt = nullptr;
 };

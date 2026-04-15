@@ -47,14 +47,25 @@ void MqttManager::loop() {
     _client.loop();
 }
 
-void MqttManager::reconnect(Config& config) {
-    String clientId = String(config.mqttClientId);
-    if (clientId.length() == 0) {
-        uint64_t mac = ESP.getEfuseMac();
-        clientId = "Freundschaftslampe-" + String((uint32_t)(mac >> 32), HEX) + String((uint32_t)mac, HEX);
+void MqttManager::forceReconnect(Config& config) {
+    if (!_client.connected()) {
+        reconnect(config);
     }
-    
-    String statusTopic = "freundschaftslampe/status/" + clientId;
+}
+
+String MqttManager::getClientId(Config& config) {
+    if (strlen(config.mqttClientId) > 0) return String(config.mqttClientId);
+    uint64_t mac = ESP.getEfuseMac();
+    return "Freundschaftslampe-" + String((uint32_t)(mac >> 32), HEX) + String((uint32_t)mac, HEX);
+}
+
+String MqttManager::getStatusTopic(Config& config) {
+    return "freundschaftslampe/status/" + getClientId(config);
+}
+
+void MqttManager::reconnect(Config& config) {
+    String clientId = getClientId(config);
+    String statusTopic = getStatusTopic(config);
     
     bool connected = false;
     if (strlen(config.mqttUser) > 0) {
@@ -72,13 +83,11 @@ void MqttManager::reconnect(Config& config) {
 }
 
 void MqttManager::publishStatus(Config& config, const char* message) {
-    String clientId = String(config.mqttClientId);
-    String statusTopic = "freundschaftslampe/status/" + clientId;
-    _client.publish(statusTopic.c_str(), message);
+    publish(getStatusTopic(config).c_str(), message, true);
 }
 
-void MqttManager::publish(const char* topic, const char* payload) {
-    _client.publish(topic, payload);
+void MqttManager::publish(const char* topic, const char* payload, bool retained) {
+    _client.publish(topic, payload, retained);
 }
 
 void MqttManager::staticCallback(char* topic, byte* payload, unsigned int length) {

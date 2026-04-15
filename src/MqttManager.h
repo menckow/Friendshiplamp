@@ -16,8 +16,11 @@ public:
     void begin(Config& config);
     void update(Config& config);
     void loop();
+    void forceReconnect(Config& config);
+    String getClientId(Config& config);
+    String getStatusTopic(Config& config);
     void publishStatus(Config& config, const char* message);
-    void publish(const char* topic, const char* payload);
+    void publish(const char* topic, const char* payload, bool retained = false);
 
 private:
     WiFiClient _espClient;
