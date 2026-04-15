@@ -546,7 +546,7 @@
             const confirmUpdate = confirm(`Soll das Update für das Gerät ${id} (${device.type}) auf Version ${ver} gestartet werden?`);
             if (confirmUpdate) {
                 const triggerTopic = `${device.type}/update/trigger`;
-                const payloadBuffer = JSON.stringify({ url: url, version: ver });
+                const payloadBuffer = JSON.stringify({ url: url, version: ver, target: id });
                 client.publish(triggerTopic, payloadBuffer);
                 alert(`Update-Befehl an ${id} gesendet.`);
             }
