@@ -1,75 +1,62 @@
-# Friendship Lamp
+# Friendship Lamp (V2.2)
 
 ![Friendship Lamp](https://github.com/menckow/Friendshiplamp/blob/main/Screenshot_20260404-204033~2.png)
 
-This project is a "Friendship Lamp" connected to other lamps via Wi-Fi and MQTT. When you send a signal, all connected lamps light up in your personal identity color.
+The **Friendship Lamp** is an ESP32-based ambient light that connects friends through synchronized colors. When one person touches their lamp, all connected lamps across the world pulse in their unique identity color via MQTT.
 
-## New Features (V2.1)
-*   **Secure OTA Update**: Update your firmware over-the-air via MQTT. Downloads are handled via HTTPS (GitHub/GitLab are automatically supported, no manual certificate setup required).
-*   **Advanced Lighting Effects**: Choose from various effects including *Fade, Color Wipe, Theater Chase, Rainbow Cycle, Breathe, Fire Effect,* and *Comet*.
-*   **Custom Duration**: The display time for received colors is now configurable.
-*   **Wi-Fi Scanning**: The setup portal automatically scans for available local Wi-Fi networks.
-*   **Enhanced Color Accuracy**: Integrated Gamma correction for vibrant and true-to-life colors.
-*   **Touch Sensitivity Control**: Configure the sensitivity of your touch sensor directly in the web UI.
-*   **Memory Optimization**: Use of `PROGMEM` for web templates to prevent heap fragmentation and improve overall stability.
+This version (V2.2) features a fully refactored, modular object-oriented architecture for maximum stability and easy extensibility.
 
-## Functionality
+## 🚀 Key Features
 
-*   **Version Reporting**: The lamp reports its current version on startup via MQTT (`freundschaft/update/status`).
-*   **Rollback Protection**: Using dual partitions, the ESP32 automatically reverts to the previous working version if an update fails.
-*   **Web-based Configuration**: Captive portal for easy setup via the "Freundschaftslampe-Setup" Wi-Fi.
-*   **Secure Web-UI**: Password protected access (Default: `12345678`).
-*   **Wi-Fi & MQTT**: Full support for standard and secure (TLS) MQTT brokers.
-*   **Dynamic LED Count**: Configure the number of LEDs directly in the UI.
-*   **Brightness Control**: Adjustable via long-press on the touch sensor.
-*   **Quiet Mode**: Schedule "Do Not Disturb" hours for nighttime.
+*   **Modular Architecture**: Clean separation of hardware control, network logic, and configuration.
+*   **Robust OTA Updates**: Secure over-the-air firmware updates with real-time status reporting back to the MQTT broker.
+*   **Smart Security**: Built-in standard Root CA (ISRG Root X1) for seamless out-of-the-box support for HiveMQ and other secure public brokers—no manual certificate pasting required.
+*   **Advanced Lighting Engine**: Smooth 32-bit gamma correction with effects like *Fade, Rainbow, Breathe, Fire, Comet,* and more.
+*   **Intuitive Web Configuration**: Mobile-friendly captive portal for Wi-Fi setup, MQTT credentials, and hardware calibration.
+*   **Smart Hardware Control**:
+    *   **Capacitive Touch**: For On/Off and continuous brightness dimming.
+    *   **Potentiometer**: Direct local color selection.
+    *   **Button**: Sending the pulse color to friends.
+*   **Night Mode**: Scheduled "Do Not Disturb" hours to keep the room dark during sleep.
 
-## 🖥️ Central Device Management
+## 🛠️ Hardware Requirements
 
-This project includes a modern web dashboard for centralized management of all lamps and Zwitscherboxen.
+*   **Microcontroller**: ESP32 Dev Kit C or ESP32-S3.
+*   **LEDs**: WS2812B (NeoPixel) Ring or Strip.
+*   **Inputs**:
+    *   1x Potentiometer (Analog)
+    *   1x Momentary Button
+    *   1x Capacitive Touch sensor (or a simple wire to a touch pin)
 
-*   **Device Manager**: Simply open `manager/dashboard.html` in your browser for a real-time overview of all devices.
-*   **Live Status (LWT)**: Using *Last Will and Testament*, any device that loses its connection is immediately marked as `offline` in the dashboard.
-*   **Version Reporting**: Every lamp reports its version on startup. This information is persistently stored on the broker (Retained Messages) and is instantly visible in the dashboard.
-*   **Status Topic**: Each device uses a unique status topic: `freundschaftslampe/status/<ClientID>`.
+### Default Pinout (Configurable)
 
-## Hardware
+| Component           | ESP32 Pin |
+| ------------------- | --------- |
+| NeoPixel DIN        | GPIO 13   |
+| Potentiometer Signal| GPIO 34   |
+| Send Button         | GPIO 4    |
+| Touch Sensor        | GPIO 32   |
 
-*   ESP32 Dev Kit C (or ESP32-S3)
-*   Adafruit NeoPixel Ring / Strip
-*   Potentiometer (for color selection in normal mode)
-*   Button (to send the identity color)
-*   Capacitive Touch Sensor (On/Off & Brightness)
+## 💻 Setup & Installation
 
-## Wiring
+### 1. Build & Upload
+This project is professionally managed using **PlatformIO**. 
+1.  Clone the repository.
+2.  Open the folder in VS Code with the PlatformIO extension installed.
+3.  Click **Build** and then **Upload**.
 
-| Component           | Pin on ESP32 |
-| ------------------- | ------------ |
-| Potentiometer (Signal) | GPIO 34      |
-| Button              | GPIO 4       |
-| NeoPixel Ring (DIN) | GPIO 13      |
-| Touch Sensor (State)| GPIO 32      |
+### 2. First-Time Configuration
+1.  If no Wi-Fi is configured, the lamp will pulse **purple** and open a Wi-Fi hotspot named `Freundschaftslampe-Setup`.
+2.  Connect to the hotspot (Password: `12345678`).
+3.  Your browser should open `http://192.168.4.1` automatically.
+4.  Enter your home Wi-Fi details and MQTT broker credentials.
+    *   *Tip: If using HiveMQ, simply check the "Use Standard Root-CA" box.*
 
-## Setup
+## 📡 MQTT Integration & Monitoring
 
-1.  **Flash Firmware**: Use PlatformIO to upload the code to your ESP32.
-2.  **Config Mode**: If no Wi-Fi is found, the lamp lights up purple/violet and opens an Access Point.
-3.  **Configure**: Connect to "Freundschaftslampe-Setup" and go to `http://192.168.4.1`.
-4.  **Personalize**: Set your identity color, select your favorite effect, and save!
+The project is designed to work with a central [Device Manager Dashboard](manager/dashboard.html).
+*   **Status Reporting**: Lamps report their firmware version and online/offline status (using LWT) to `freundschaftslampe/status/<ClientID>`.
+*   **Update Trigger**: Remote updates can be triggered via `freundschaftslampe/update/trigger` using a JSON payload containing the new `.bin` URL.
 
----
-
-# User Manual
-
-## 1. Setup
-Connect to the Wi-Fi **"Freundschaftslampe-Setup"** (Password: `12345678`). Your browser should automatically open the configuration page. There you can select your home Wi-Fi and personalize your lamp.
-
-### 2. Operation
-* **💡 On/Off**: Briefly touch the touch sensor.
-* **☀️ Brightness**: Press and hold the touch sensor. The lamp's brightness will change continuously.
-* **📉 Sensitivity**: The touch sensitivity can be adjusted in the settings. A lower value makes the switch more sensitive.
-* **🎨 Color Selection**: Turn the potentiometer to change the lamp's color.
-* **💌 Send**: Press the button. Your lamp will now send your selected color and effect to your friends.
-
-### 3. Effekte
-You can choose from various animations in the settings. The **Fire Effect** flickers in your color, while the **Comet** draws a light trail around the ring. The **Rainbow** is an exception and always shows the full color spectrum.
+## 📄 License & Credits
+Developed for the community. Feel free to fork and enhance!
