@@ -1,11 +1,26 @@
 #include "OTAHandler.h"
 #include "MqttManager.h"
+#include <Update.h>
 
 OTAHandler::OTAHandler(LampController& lamp) : _lamp(lamp) {}
 
-void OTAHandler::performUpdate(const char* url, const char* version, const char* currentVersion, Config& config) {
+void OTAHandler::performUpdate(const char* url, const char* version, const char* md5, const char* currentVersion, Config& config) {
     Serial.println("OTA Update Prozess gestartet...");
     Serial.printf("Update-URL: %s\n", url);
+    
+    if (md5 == nullptr || strlen(md5) != 32) {
+        String errorMsg = "Update failed: Invalid or missing MD5 hash (must be 32 characters)";
+        Serial.println(errorMsg);
+        sendStatusRobust(errorMsg.c_str(), config);
+        _lamp.setAllPixels(0xFF0000, 100); // Rot bei Fehler
+        delay(2000);
+        _lamp.setAllPixels(0, 0);
+        
+        delay(3000);
+        String resetMsg = "V" + String(currentVersion) + ":online";
+        sendStatusRobust(resetMsg.c_str(), config);
+        return;
+    }
     
     // Status via MQTT melden
     String startMsg = "Updating to " + String(version);
@@ -17,6 +32,8 @@ void OTAHandler::performUpdate(const char* url, const char* version, const char*
     // Ring blau leuchten lassen während des Updates
     _lamp.setAllPixels(0x0000FF, 100);
 
+    Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
+    Update.setMD5(md5);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     httpUpdate.onProgress([](int cur, int total) {
         static int lastPercent = -1;

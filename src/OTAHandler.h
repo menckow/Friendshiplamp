@@ -13,7 +13,7 @@ class OTAHandler {
 public:
     OTAHandler(LampController& lamp);
     void setMqttManager(MqttManager* mqtt) { _mqtt = mqtt; }
-    void performUpdate(const char* url, const char* version, const char* currentVersion, Config& config);
+    void performUpdate(const char* url, const char* version, const char* md5, const char* currentVersion, Config& config);
 
 private:
     void sendStatusRobust(const char* msg, Config& config);

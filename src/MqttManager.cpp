@@ -119,8 +119,9 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
         if (!error) {
             const char* url = doc["url"] | "";
             const char* version = doc["version"] | "";
+            const char* md5 = doc["md5"] | "";
             if (strlen(url) > 0 && strcmp(version, _instance->FW_VERSION) != 0 && _instance->_config != nullptr) {
-                _instance->_ota.performUpdate(url, version, _instance->FW_VERSION, *(_instance->_config));
+                _instance->_ota.performUpdate(url, version, md5, _instance->FW_VERSION, *(_instance->_config));
             }
         }
     }
