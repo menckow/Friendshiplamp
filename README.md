@@ -9,7 +9,7 @@ This version (V2.2) features a fully refactored, modular object-oriented archite
 ## 🚀 Key Features
 
 *   **Modular Architecture**: Clean separation of hardware control, network logic, and configuration.
-*   **Robust OTA Updates**: Secure over-the-air firmware updates with real-time status reporting back to the MQTT broker.
+*   **Robust OTA Updates**: Secure over-the-air firmware updates via MQTT using 32-character **MD5 validation** to ensure firmware integrity. Includes a dynamic LED ring visual progress bar and live `%` status reporting back to the remote Manager Dashboard.
 *   **Smart Security**: Built-in standard Root CA (ISRG Root X1) for seamless out-of-the-box support for HiveMQ and other secure public brokers—no manual certificate pasting required.
 *   **Advanced Lighting Engine**: Smooth 32-bit gamma correction with effects like *Fade, Rainbow, Breathe, Fire, Comet,* and more.
 *   **Intuitive Web Configuration**: Mobile-friendly captive portal for Wi-Fi setup, MQTT credentials, and hardware calibration.
@@ -17,7 +17,7 @@ This version (V2.2) features a fully refactored, modular object-oriented archite
     *   **Capacitive Touch**: For On/Off and continuous brightness dimming.
     *   **Potentiometer**: Direct local color selection.
     *   **Button**: Sending the pulse color to friends.
-*   **Night Mode**: Scheduled "Do Not Disturb" hours to keep the room dark during sleep.
+*   **Night Mode (Do Not Disturb)**: NTP-synced, scheduled quiet hours configurable via the Web UI to keep the room completely dark and suppress incoming color flashes during sleep.
 
 ## 🛠️ Hardware Requirements
 

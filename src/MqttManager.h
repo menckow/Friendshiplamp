@@ -33,7 +33,7 @@ private:
     
     unsigned long _lastMqttReconnectAttempt = 0;
     const unsigned long RECONNECT_INTERVAL = 5000;
-    const char* FW_VERSION = "V2.2.0"; // Should be synced with main.cpp or a version header
+    const char* FW_VERSION = "V2.2.1"; // Should be synced with main.cpp or a version header
 
     void reconnect(Config& config);
     void callback(char* topic, byte* payload, unsigned int length);
