@@ -35,12 +35,15 @@ void OTAHandler::performUpdate(const char* url, const char* version, const char*
     Serial.printf("Sicherheits-Check: MD5 Hash Validierung aktiviert (%s)\n", md5);
     Update.setMD5(md5);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    httpUpdate.onProgress([](int cur, int total) {
+    httpUpdate.onProgress([this, &config, currentVersion](int cur, int total) {
         static int lastPercent = -1;
         int percent = (cur * 100) / total;
         if (percent % 10 == 0 && percent != lastPercent) {
             lastPercent = percent;
             Serial.printf("Download: %d%%\n", percent);
+            
+            String progMsg = "V" + String(currentVersion) + ":Updating (" + String(percent) + "%)";
+            sendStatusRobust(progMsg.c_str(), config);
         }
     });
 
