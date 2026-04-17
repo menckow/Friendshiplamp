@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Manager (Lampen & Boxen)</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- MQTT.js via CDN -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --accent: #ec4899;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #1e1b4b, #0f172a);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 40px 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #818cf8, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .status-connected { color: var(--success); border-color: var(--success); }
+        .status-disconnected { color: var(--danger); border-color: var(--danger); }
+
+        .dashboard-grid {
+            display: grid;
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 12px;
+        }
+
+        th {
+            text-align: left;
+            padding: 0 15px;
+            color: #94a3b8;
+            font-weight: 400;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+
+        tr.device-row {
+            background: rgba(255, 255, 255, 0.03);
+            transition: transform 0.2s, background 0.3s;
+        }
+
+        tr.device-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+            transform: scale(1.01);
+        }
+
+        td {
+            padding: 15px;
+        }
+
+        td:first-child { border-radius: 12px 0 0 12px; }
+        td:last-child { border-radius: 0 12px 12px 0; }
+
+        .device-id { font-weight: 600; color: #cbd5e1; }
+        .type-pill {
+            background: rgba(255, 255, 255, 0.1);
+            color: #94a3b8;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .version-pill {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: monospace;
+        }
+
+        .status-pill {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .pill-online { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .pill-offline { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .pill-updating { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+
+        .btn-update {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-update:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+            filter: brightness(1.1);
+        }
+
+        .btn-update:active { transform: translateY(0); }
+
+        .update-form {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 16px;
+            margin-top: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 15px;
+            border-radius: 12px;
+            color: white;
+            flex: 1;
+            min-width: 200px;
+            font-family: inherit;
+        }
+
+        input:focus { outline: 2px solid var(--primary); }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .no-devices {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        /* Login Mask Styles */
+        #login-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+
+        .login-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            text-align: center;
+        }
+
+        .login-card h2 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .login-form input {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Custom Modal -->
+    <div id="custom-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); z-index: 10000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s ease;">
+        <div class="card" style="max-width: 400px; text-align: center; width: 90%;">
+            <h2 id="modal-title" style="margin-bottom: 15px; font-size: 1.8rem; background: linear-gradient(to right, #818cf8, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Titel</h2>
+            <p id="modal-text" style="color: #cbd5e1; margin-bottom: 25px; line-height: 1.5;">Text</p>
+            <div style="display: flex; justify-content: center; gap: 15px;">
+                <button type="button" class="btn-update" id="modal-cancel" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; box-shadow: none;">Abbrechen</button>
+                <button type="button" class="btn-update" id="modal-confirm" style="background: rgba(34, 197, 94, 0.2); color: #22c55e; box-shadow: none;">Bestätigen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Mask -->
+    <div id="login-mask">
+        <div class="login-card">
+            <h2>Device Manager Login</h2>
+            <div class="login-form">
+                <input type="text" id="mqtt-broker" placeholder="MQTT Broker (z.B. hivemq.cloud)" value="">
+                <input type="number" id="mqtt-port" placeholder="Port (z.B. 8884)" value="8884">
+                <input type="text" id="mqtt-username" placeholder="Benutzername" value="">
+                <input type="password" id="mqtt-password" placeholder="Passwort">
+                <button type="button" class="btn-login" id="login-button" onclick="startMqttConnection()">Verbinden & Starten</button>
+                <div id="login-status" style="margin-top: 15px; font-size: 0.9rem; color: #818cf8; font-weight: 600;"></div>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.8rem; color: #64748b;">
+                Die Zugangsdaten werden nur lokal in dieser Sitzung verwendet.
+            </p>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Device Manager</h1>
+            <div id="mqtt-status" class="status-badge status-disconnected">Verbinde zum Broker...</div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Table Card -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Gefundene Geräte</div>
+                    <div id="device-count">0 Geräte gefunden</div>
+                </div>
+                
+                <table id="device-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Typ</th>
+                            <th>Version</th>
+                            <th>Status</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="device-list">
+                        <!-- Wird dynamisch gefüllt -->
+                    </tbody>
+                </table>
+                <div id="no-devices" class="no-devices">Warte auf Signale...</div>
+            </div>
+
+            <!-- Global Update Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 30px;">
+                <!-- Table for Lamp Update -->
+                <div class="card">
+                    <div class="card-title">Update: Lampen</div>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">Trigger: freundschaftslampe/update/trigger</p>
+                    <div class="update-form">
+                        <div class="input-group">
+                            <input type="text" id="lamp-url" placeholder="Firmware URL">
+                            <input type="text" id="lamp-version" placeholder="Version" style="max-width: 100px;">
+                            <input type="text" id="lamp-md5" placeholder="MD5 Hash (opt)" style="max-width: 130px;">
+                            <button type="button" class="btn-update" onclick="broadcastUpdate('freundschaftslampe')">Alle Lampen upgraden</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table for Zwitscherbox Update -->
+                <div class="card">
+                    <div class="card-title">Update: Zwitscherboxen</div>
+                    <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 5px;">Trigger: zwitscherbox/update/trigger</p>
+                    <div class="update-form">
+                        <div class="input-group">
+                            <input type="text" id="box-url" placeholder="Firmware URL">
+                            <input type="text" id="box-version" placeholder="Version" style="max-width: 100px;">
+                            <input type="text" id="box-md5" placeholder="MD5 Hash (opt)" style="max-width: 130px;">
+                            <button type="button" class="btn-update" onclick="broadcastUpdate('zwitscherbox')">Alle Boxen upgraden</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let client;
+        let devices = {}; 
+        const statusLabel = document.getElementById('mqtt-status');
+
+        // Lade gespeicherte Broker/User Daten aus dem localStorage (Komfort)
+        window.onload = () => {
+            const savedBroker = localStorage.getItem('mqtt_broker');
+            const savedUser = localStorage.getItem('mqtt_username');
+            const savedPort = localStorage.getItem('mqtt_port');
+            
+            if (savedBroker) document.getElementById('mqtt-broker').value = savedBroker;
+            if (savedUser) document.getElementById('mqtt-username').value = savedUser;
+            if (savedPort) document.getElementById('mqtt-port').value = savedPort;
+        };
+
+        let modalTimeoutDisplay;
+        let modalTimeoutOpacity;
+
+        function showModal(title, text, isConfirm, onConfirm) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-text').innerText = text;
+            
+            clearTimeout(modalTimeoutDisplay);
+            clearTimeout(modalTimeoutOpacity);
+            
+            const cancelBtn = document.getElementById('modal-cancel');
+            const confirmBtn = document.getElementById('modal-confirm');
+            
+            if (isConfirm) {
+                cancelBtn.style.display = 'block';
+                confirmBtn.innerText = 'Ja, Starten';
+                confirmBtn.style.background = 'linear-gradient(135deg, var(--primary), var(--secondary))';
+                confirmBtn.style.color = 'white';
+            } else {
+                cancelBtn.style.display = 'none';
+                confirmBtn.innerText = 'OK';
+                confirmBtn.style.background = 'rgba(34, 197, 94, 0.2)';
+                confirmBtn.style.color = '#22c55e';
+            }
+            
+            modal.style.display = 'flex';
+            modalTimeoutOpacity = setTimeout(() => modal.style.opacity = '1', 10);
+            
+            confirmBtn.onclick = () => {
+                modal.style.opacity = '0';
+                modalTimeoutDisplay = setTimeout(() => modal.style.display = 'none', 300);
+                if (onConfirm) onConfirm();
+            };
+            cancelBtn.onclick = () => {
+                modal.style.opacity = '0';
+                modalTimeoutDisplay = setTimeout(() => modal.style.display = 'none', 300);
+            };
+        }
+
+        function startMqttConnection() {
+            let broker = document.getElementById('mqtt-broker').value.trim();
+            const portInput = document.getElementById('mqtt-port');
+            let port = parseInt(portInput.value);
+            const user = document.getElementById('mqtt-username').value.trim();
+            const pass = document.getElementById('mqtt-password').value;
+
+            if (!broker || !user || !pass) {
+                showModal("Eingabe fehlt", "Bitte fülle alle Login-Felder aus.", false);
+                return;
+            }
+
+            // Port 8883 ist für native Clients, Browser brauchen 8884 (WebSockets)
+            if (port === 8883) {
+                console.warn("Port 8883 erkannt. Browser benötigen für HiveMQ Cloud WebSockets (Port 8884). Korrigiere...");
+                port = 8884;
+                portInput.value = 8884;
+            }
+
+            // Bereinige Broker-URL
+            broker = broker.replace(/^wss?:\/\//i, '').replace(/\/$/, '');
+
+            // Speichere Broker & User für den nächsten Besuch
+            localStorage.setItem('mqtt_broker', broker);
+            localStorage.setItem('mqtt_username', user);
+            localStorage.setItem('mqtt_port', port);
+
+            const options = {
+                clientId: 'manager_' + Math.random().toString(16).substr(2, 8),
+                username: user,
+                password: pass,
+                clean: true,
+                connectTimeout: 10000,
+                reconnectPeriod: 2000,
+                protocol: 'wss',
+                protocolVersion: 4, // Erforderlich für viele Cloud-Broker (MQTT 3.1.1)
+                rejectUnauthorized: false
+            };
+
+            const loginStatus = document.getElementById('login-status');
+            const loginBtn = document.getElementById('login-button');
+
+            statusLabel.innerText = "Verbindung wird aufgebaut...";
+            loginStatus.innerText = "Verbindung via WebSockets (TLS)...";
+            loginStatus.style.color = "#818cf8";
+            loginBtn.disabled = true;
+            loginBtn.innerText = "Verbinde...";
+            
+            // HiveMQ Cloud WebSocket-Endpoint
+            const wsUrl = `wss://${broker}:${port}/mqtt`;
+            console.log("Verbindung wird gestartet:", wsUrl);
+            
+            client = mqtt.connect(wsUrl, options);
+
+            client.on('connect', () => {
+                console.log('Verbunden!');
+                statusLabel.innerText = "Verbunden";
+                statusLabel.className = "status-badge status-connected";
+                loginStatus.innerText = "Erfolgreich verbunden!";
+                loginStatus.style.color = "#22c55e";
+                
+                // Login-Maske ausblenden
+                document.getElementById('login-mask').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('login-mask').style.display = 'none';
+                }, 500);
+                
+                client.subscribe("+/status/#");
+            });
+
+            client.on('error', (err) => {
+                console.error('MQTT Fehler:', err);
+                loginStatus.innerText = "Fehler: " + err.message;
+                loginStatus.style.color = "#ef4444";
+                loginBtn.disabled = false;
+                loginBtn.innerText = "Verbinden & Starten";
+                
+                statusLabel.innerText = "Verbindungsfehler";
+                statusLabel.className = "status-badge status-disconnected";
+            });
+
+            client.on('message', (topic, message) => {
+                const payload = message.toString();
+                console.log(`Topic: ${topic}, Message: ${payload}`);
+
+                // Topic Format: <TYPE>/status/<ID>
+                const parts = topic.split('/');
+                if (parts.length < 3) return;
+                const type = parts[0];
+                const clientId = parts[parts.length - 1];
+
+                // Payload Format: Version:Status
+                const dataParts = payload.split(':');
+                const version = dataParts[0] || 'Unknown';
+                const status = dataParts[1] || payload;
+
+                updateDeviceList(clientId, type, version, status);
+            });
+        }
+
+        function updateDeviceList(id, type, version, status) {
+            devices[id] = { type, version, status, lastSeen: Date.now() };
+            renderTable();
+        }
+
+        function renderTable() {
+            const list = document.getElementById('device-list');
+            const noDevices = document.getElementById('no-devices');
+            const count = document.getElementById('device-count');
+            
+            list.innerHTML = '';
+            const entries = Object.entries(devices);
+            
+            if (entries.length > 0) {
+                noDevices.style.display = 'none';
+                count.innerText = `${entries.length} Gerät(e) gefunden`;
+            }
+
+            entries.sort((a,b) => a[1].type.localeCompare(b[1].type) || a[0].localeCompare(b[0])).forEach(([id, data]) => {
+                const row = document.createElement('tr');
+                row.className = 'device-row';
+
+                let statusClass = 'pill-online';
+                let statusText = data.status;
+
+                if (data.status === 'offline') {
+                    statusClass = 'pill-offline';
+                } else if (data.status.toLowerCase().includes('update')) {
+                    statusClass = 'pill-updating';
+                }
+
+                row.innerHTML = `
+                    <td><span class="device-id">${id}</span></td>
+                    <td><span class="type-pill">${data.type === 'freundschaftslampe' ? 'Lampe' : 'Box'}</span></td>
+                    <td><span class="version-pill">${data.version}</span></td>
+                    <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+                    <td><button type="button" class="btn-update" onclick="triggerUpdate('${id}')">Update</button></td>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        function triggerUpdate(id) {
+            const device = devices[id];
+            if (!device) return;
+
+            const urlId = device.type === 'freundschaftslampe' ? 'lamp-url' : 'box-url';
+            const verId = device.type === 'freundschaftslampe' ? 'lamp-version' : 'box-version';
+            const md5Id = device.type === 'freundschaftslampe' ? 'lamp-md5' : 'box-md5';
+            const url = document.getElementById(urlId).value;
+            const ver = document.getElementById(verId).value;
+            const md5 = document.getElementById(md5Id).value;
+            
+            if (!url || !ver) {
+                showModal("Fehlende Daten", `Bitte fülle URL und Version im Bereich "${device.type === 'freundschaftslampe' ? 'Lampen' : 'Zwitscherboxen'}" aus.`, false);
+                return;
+            }
+
+            showModal("Update starten?", `Soll das Update für das Gerät ${id} (${device.type}) auf Version ${ver} wirklich drahtlos gestartet werden?`, true, () => {
+                const triggerTopic = `${device.type}/update/trigger`;
+                const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5, target: id });
+                client.publish(triggerTopic, payloadBuffer);
+                showModal("Gesendet", `OTA Update-Befehl an ${id} wurde versendet!`, false);
+            });
+        }
+
+        function broadcastUpdate(type) {
+            const urlId = type === 'freundschaftslampe' ? 'lamp-url' : 'box-url';
+            const verId = type === 'freundschaftslampe' ? 'lamp-version' : 'box-version';
+            const md5Id = type === 'freundschaftslampe' ? 'lamp-md5' : 'box-md5';
+            
+            const url = document.getElementById(urlId).value;
+            const ver = document.getElementById(verId).value;
+            const md5 = document.getElementById(md5Id).value;
+
+            if (!url || !ver) {
+                showModal("Fehlende Daten", "Bitte gebe URL und Version für den globalen Update-Befehl an.", false);
+                return;
+            }
+
+            showModal("Massen-Update", `Achtung: Sollen wirklich ALLE ${type === 'freundschaftslampe' ? 'Lampen' : 'Boxen'} auf einmal aktualisiert werden?`, true, () => {
+                const triggerTopic = `${type}/update/trigger`;
+                const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5 });
+                client.publish(triggerTopic, payloadBuffer);
+                showModal("Gesendet", `Globaler Update-Befehl an alle ${type === 'freundschaftslampe' ? 'Lampen' : 'Boxen'} gesendet.`, false);
+            });
+        }
+    </script>
+</body>
+</html>
