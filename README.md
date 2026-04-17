@@ -54,7 +54,7 @@ This project is professionally managed using **PlatformIO**.
 
 ## 📡 MQTT Integration & Monitoring
 
-The project is designed to work with a central [Device Manager Dashboard](manager/dashboard.html).
+The project is designed to work with a central [Device Manager Dashboard](manager/dashboard_secure.html).
 *   **Status Reporting**: Lamps report their firmware version and online/offline status (using LWT) to `freundschaftslampe/status/<ClientID>`.
 *   **Update Trigger**: Remote updates can be triggered via `freundschaftslampe/update/trigger` using a JSON payload containing the new `.bin` URL.
 
