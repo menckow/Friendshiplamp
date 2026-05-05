@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include "StandardCAs.h"
 #include "OTAHandler.h"
+#include <time.h>
 
 MqttManager* MqttManager::_instance = nullptr;
 
@@ -102,9 +103,44 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
     message[length] = '\0';
     
     if (strcmp(topic, _instance->_mqttTopic) == 0) {
+        // --- Ruhemodus Check ---
+        if (_instance->_config != nullptr && _instance->_config->quietModeEnabled) {
+            time_t now = time(nullptr);
+            struct tm* timeinfo = localtime(&now);
+            uint8_t currentHour = timeinfo->tm_hour;
+            uint8_t start = _instance->_config->quietHourStart;
+            uint8_t end = _instance->_config->quietHourEnd;
+            
+            bool inQuietTime = false;
+            if (start < end) {
+                inQuietTime = (currentHour >= start && currentHour < end);
+            } else {
+                // Über Mitternacht (z.B. 22:00 bis 07:00)
+                inQuietTime = (currentHour >= start || currentHour < end);
+            }
+            
+            if (inQuietTime) {
+                Serial.printf("Signal ignoriert: Ruhemodus aktiv (%02d:00-%02d:00, jetzt %02d:00)\n", start, end, currentHour);
+                return;
+            }
+        }
+
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
         if (!error) {
+            // --- Zeitstempel Check (Vermeidung von Retained Messages) ---
+            if (doc["ts"].is<time_t>()) {
+                time_t msgTs = doc["ts"];
+                time_t now = time(nullptr);
+                if (now > 0 && msgTs > 0) { // Nur prüfen, wenn Zeit synchronisiert ist
+                    long age = (long)now - (long)msgTs;
+                    if (abs(age) > 60) {
+                        Serial.printf("Signal ignoriert: Veraltet (Alter: %lds)\n", age);
+                        return;
+                    }
+                }
+            }
+
             if (doc["color"].is<const char*>()) {
                 const char* colorHex = doc["color"];
                 uint32_t color = (uint32_t) strtoul(colorHex + (colorHex[0] == '#' ? 1 : 0), NULL, 16);

@@ -7,6 +7,7 @@
 #include "InputHandler.h"
 #include "OTAHandler.h"
 #include "WebManager.h"
+#include <time.h>
 
 // == Globale Instanzen =====================================================
 ConfigManager configMgr;
@@ -59,6 +60,7 @@ void loop() {
         doc["color"] = hexColor;
         doc["effect"] = config.effect;
         doc["duration"] = config.duration;
+        doc["ts"] = time(nullptr);
         
         String payload;
         serializeJson(doc, payload);
