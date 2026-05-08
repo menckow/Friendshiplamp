@@ -78,7 +78,9 @@ void MqttManager::reconnect(Config& config) {
     if (connected) {
         _client.subscribe(config.mqttTopic);
         _client.subscribe("freundschaftslampe/update/trigger");
-        _client.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online").c_str(), true);
+        char hexColor[10];
+        sprintf(hexColor, "#%06X", config.identityColor);
+        _client.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + String(hexColor)).c_str(), true);
         Serial.println("MQTT verbunden.");
     }
 }
