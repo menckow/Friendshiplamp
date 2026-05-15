@@ -30,9 +30,18 @@ private:
     unsigned long _touchStartTime = 0;
     unsigned long _lastBrightnessAnimTime = 0;
     int _brightnessDirection = -1;
-    
+
+    // Entstör-Filter für den Touch-Sensor (gegen elektrisches Rauschen)
+    bool _touchActive = false;
+    uint8_t _touchBelowCount = 0;
+    uint8_t _touchAboveCount = 0;
+
     static const unsigned long DEBOUNCE_DELAY = 50;
     static const unsigned long BRIGHTNESS_ANIM_DELAY = 10;
+    static const uint8_t TOUCH_SAMPLES = 4;              // gemittelte Messungen pro update()
+    static const uint8_t TOUCH_CONFIRM_SAMPLES = 4;      // ~40ms Bestätigung vor Zustandswechsel
+    static const uint8_t TOUCH_RELEASE_HYSTERESIS = 8;   // Release-Schwelle = threshold + diesen Offset
+    static const uint8_t MIN_DIM_BRIGHTNESS = 30;        // Helligkeit wird nicht dunkler als das (sichtbar bleiben)
 };
 
 #endif

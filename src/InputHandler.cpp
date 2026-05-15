@@ -28,10 +28,27 @@ void InputHandler::update(Config& config) {
         _lamp.setColorHSV(hue);
     }
     
-    // Touch
-    int val = touchRead(32); // TOUCH_PIN
+    // Touch (Mittelung + Hysterese + Bestätigungs-Samples gegen elektrisches Rauschen)
+    uint32_t sum = 0;
+    for (uint8_t i = 0; i < TOUCH_SAMPLES; i++) sum += touchRead(32); // TOUCH_PIN
+    int val = sum / TOUCH_SAMPLES;
+
+    uint16_t engageThreshold = config.touchThreshold;
+    uint16_t releaseThreshold = config.touchThreshold + TOUCH_RELEASE_HYSTERESIS;
+    bool rawBelow = _touchActive ? (val < releaseThreshold) : (val < engageThreshold);
+
+    if (rawBelow) {
+        _touchAboveCount = 0;
+        if (_touchBelowCount < TOUCH_CONFIRM_SAMPLES) _touchBelowCount++;
+    } else {
+        _touchBelowCount = 0;
+        if (_touchAboveCount < TOUCH_CONFIRM_SAMPLES) _touchAboveCount++;
+    }
+    if (!_touchActive && _touchBelowCount >= TOUCH_CONFIRM_SAMPLES) _touchActive = true;
+    else if (_touchActive && _touchAboveCount >= TOUCH_CONFIRM_SAMPLES) _touchActive = false;
+
     unsigned long now = millis();
-    if (val < config.touchThreshold) {
+    if (_touchActive) {
         if (_touchState == IDLE) { _touchState = TOUCH_DETECTED; _touchStartTime = now; }
         if (_touchState == TOUCH_DETECTED && (now - _touchStartTime) >= 1000) {
             _touchState = LONG_TOUCH_ACTIVE;
@@ -40,7 +57,9 @@ void InputHandler::update(Config& config) {
         if (_touchState == LONG_TOUCH_ACTIVE && (now - _lastBrightnessAnimTime > BRIGHTNESS_ANIM_DELAY)) {
             _lastBrightnessAnimTime = now;
             int next = _lamp.getBrightness() + _brightnessDirection;
-            if (next <= 10) { next = 10; _brightnessDirection = 1; }
+            // Helligkeits-Untergrenze, damit ein versehentlich getriggerter Dimm-Vorgang
+            // die Lampe nicht "aus" wirken lässt
+            if (next <= MIN_DIM_BRIGHTNESS) { next = MIN_DIM_BRIGHTNESS; _brightnessDirection = 1; }
             else if (next >= 255) { next = 255; _brightnessDirection = -1; }
             _lamp.setBrightness(next);
         }

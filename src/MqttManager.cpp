@@ -131,10 +131,18 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
         DeserializationError error = deserializeJson(doc, message);
         if (!error) {
             // --- Zeitstempel Check (Vermeidung von Retained Messages) ---
+            // Solange NTP nicht synchronisiert ist, können wir Alter/Gültigkeit nicht prüfen
+            // -> alle Signale verwerfen, damit retained Messages nach Boot/Reconnect die
+            //    Lampe nicht ungewollt aufleuchten lassen.
+            time_t now = time(nullptr);
+            const time_t NTP_VALID_AFTER = 1700000000; // ~2023-11-14, "echte" Zeit erkannt
+            if (now < NTP_VALID_AFTER) {
+                Serial.println("Signal ignoriert: Zeit noch nicht via NTP synchronisiert");
+                return;
+            }
             if (doc["ts"].is<time_t>()) {
                 time_t msgTs = doc["ts"];
-                time_t now = time(nullptr);
-                if (now > 0 && msgTs > 0) { // Nur prüfen, wenn Zeit synchronisiert ist
+                if (msgTs > 0) {
                     long age = (long)now - (long)msgTs;
                     if (abs(age) > 60) {
                         Serial.printf("Signal ignoriert: Veraltet (Alter: %lds)\n", age);
