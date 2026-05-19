@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freundschaftslampe</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root { --lamp-color: #007bff; }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: #121212;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        #lamp-button {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background-color: var(--lamp-color);
+            border: none;
+            box-shadow: 0 0 30px var(--lamp-color);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        #lamp-button:active { transform: scale(0.9); }
+        #lamp-button svg { width: 80px; fill: white; }
+        .status { font-size: 0.9em; color: #888; margin-bottom: 20px; }
+        .settings-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+        }
+        #settings-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 10;
+            overflow-y: auto;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #222;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        button.save {
+            width: 100%;
+            padding: 15px;
+            background: var(--lamp-color);
+            border: none;
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+
+    <button id="lamp-button" onclick="sendSignal()">
+        <svg viewBox="0 0 24 24"><path d="M12,21.35L10.55,20.03C5.4,15.36 2,12.27 2,8.5C2,5.41 4.41,3 7.5,3C9.24,3 10.91,3.81 12,5.08C13.09,3.81 14.76,3 16.5,3C19.59,3 22,5.41 22,8.5C22,12.27 18.6,15.36 13.45,20.03L12,21.35Z"/></svg>
+    </button>
+
+    <div class="status" id="status">Verbindung wird aufgebaut...</div>
+    <div id="debug-log" style="font-size: 0.7em; color: #666; max-width: 80%; text-align: center; margin-top: 10px; font-family: monospace;"></div>
+    <div style="font-size: 0.8em; color: #555; margin-top: 20px;">Tippe auf das Herz, um zu leuchten.</div>
+
+    <div id="settings-modal">
+        <h2>Einstellungen</h2>
+        <label>MQTT Broker (URL)</label>
+        <input type="text" id="broker" placeholder="z.B. ID.s1.eu.hivemq.cloud:8884/mqtt">
+        <p style="font-size: 0.7em; color: #888; margin-top: -10px;">Wichtig: Port 8884 und /mqtt am Ende nutzen!</p>
+        <label>Benutzername</label>
+        <input type="text" id="user">
+        <label>Passwort</label>
+        <input type="password" id="pass">
+        <label>MQTT Topic</label>
+        <input type="text" id="topic" placeholder="freundschaftslampe/topic">
+        <label>Deine Farbe (Hex)</label>
+        <input type="color" id="color" value="#007bff">
+        <label>Lichteffekt</label>
+        <select id="effect">
+            <option value="fade">Fade</option>
+            <option value="color_wipe">Color Wipe</option>
+            <option value="theater_chase">Theater Chase</option>
+            <option value="rainbow_cycle">Rainbow</option>
+            <option value="breathe">Breathe</option>
+            <option value="fire">Feuer</option>
+            <option value="comet">Komet</option>
+        </select>
+        <button class="save" onclick="saveSettings()">Speichern & Verbinden</button>
+        <button onclick="toggleSettings()" style="width:100%; background:none; border:none; color:#888; margin-top:10px;">Abbrechen</button>
+    </div>
+
+    <script>
+        let client = null;
+        let config = {
+            broker: localStorage.getItem('mqtt_broker') || '',
+            user: localStorage.getItem('mqtt_user') || '',
+            pass: localStorage.getItem('mqtt_pass') || '',
+            topic: localStorage.getItem('mqtt_topic') || 'freundschaftslampe/topic',
+            color: localStorage.getItem('mqtt_color') || '#007bff',
+            effect: localStorage.getItem('mqtt_effect') || 'fade'
+        };
+
+        function updateUI() {
+            document.documentElement.style.setProperty('--lamp-color', config.color);
+            document.getElementById('broker').value = config.broker;
+            document.getElementById('user').value = config.user;
+            document.getElementById('pass').value = config.pass;
+            document.getElementById('topic').value = config.topic;
+            document.getElementById('color').value = config.color;
+            document.getElementById('effect').value = config.effect;
+        }
+
+        function toggleSettings() {
+            const modal = document.getElementById('settings-modal');
+            modal.style.display = modal.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function saveSettings() {
+            config.broker = document.getElementById('broker').value;
+            config.user = document.getElementById('user').value;
+            config.pass = document.getElementById('pass').value;
+            config.topic = document.getElementById('topic').value;
+            config.color = document.getElementById('color').value;
+            config.effect = document.getElementById('effect').value;
+
+            localStorage.setItem('mqtt_broker', config.broker);
+            localStorage.setItem('mqtt_user', config.user);
+            localStorage.setItem('mqtt_pass', config.pass);
+            localStorage.setItem('mqtt_topic', config.topic);
+            localStorage.setItem('mqtt_color', config.color);
+            localStorage.setItem('mqtt_effect', config.effect);
+
+            toggleSettings();
+            updateUI();
+            connect();
+        }
+
+        function log(msg) {
+            const logDiv = document.getElementById('debug-log');
+            logDiv.innerText = msg;
+            console.log(msg);
+        }
+
+        function connect() {
+            if (!config.broker) {
+                document.getElementById('status').innerText = 'Bitte Broker konfigurieren.';
+                return;
+            }
+
+            if (client) client.end();
+
+            document.getElementById('status').innerText = 'Verbindung wird aufgebaut...';
+            
+            // Bereinige Broker-URL (kein wss:// vorne, kein / am Ende)
+            let brokerHost = config.broker.replace(/^wss?:\/\//i, '').replace(/\/.*$/, '').split(':')[0];
+            let port = 8884; // Standard für HiveMQ Cloud WebSockets
+
+            log('Versuche Verbindung zu: ' + brokerHost + ':' + port);
+
+            const options = {
+                clientId: 'LampApp_' + Math.random().toString(16).substr(2, 8),
+                username: config.user,
+                password: config.pass,
+                clean: true,
+                connectTimeout: 10000,
+                reconnectPeriod: 2000,
+                protocol: 'wss',
+                protocolVersion: 4, // MQTT 3.1.1
+                rejectUnauthorized: false
+            };
+
+            try {
+                // HiveMQ Cloud benötigt zwingend den /mqtt Pfad für WebSockets
+                const wsUrl = `wss://${brokerHost}:${port}/mqtt`;
+                log('WebSocket URL: ' + wsUrl);
+                
+                client = mqtt.connect(wsUrl, options);
+
+                client.on('connect', () => {
+                    document.getElementById('status').innerText = 'Verbunden ✅';
+                    document.getElementById('status').style.color = '#4caf50';
+                    log('Erfolgreich verbunden!');
+                });
+
+                client.on('reconnect', () => {
+                    log('Verbindung verloren, verbinde neu...');
+                });
+
+                client.on('error', (err) => {
+                    document.getElementById('status').innerText = 'Fehler ❌';
+                    document.getElementById('status').style.color = '#f44336';
+                    log('MQTT Fehler: ' + err.message);
+                });
+
+                client.on('close', () => {
+                    log('Verbindung geschlossen.');
+                });
+
+            } catch (e) {
+                log('Ausnahme: ' + e.message);
+            }
+        }
+
+        function sendSignal() {
+            if (!client || !client.connected) {
+                alert('Nicht verbunden!');
+                connect();
+                return;
+            }
+
+            const payload = {
+                client_id: client.options.clientId,
+                color: config.color.toUpperCase(),
+                effect: config.effect,
+                duration: 10000
+            };
+
+            client.publish(config.topic, JSON.stringify(payload));
+            
+            // Haptisches Feedback (Vibration)
+            if (navigator.vibrate) navigator.vibrate(100);
+            
+            const btn = document.getElementById('lamp-button');
+            btn.style.transform = 'scale(1.2)';
+            setTimeout(() => btn.style.transform = 'scale(1)', 200);
+        }
+
+        updateUI();
+        connect();
+    </script>
+</body>
+</html>

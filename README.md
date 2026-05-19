@@ -12,7 +12,9 @@ This version (V2.2) features a fully refactored, modular object-oriented archite
 *   **Robust OTA Updates**: Secure over-the-air firmware updates via MQTT using 32-character **MD5 validation** to ensure firmware integrity. Includes a dynamic LED ring visual progress bar and live `%` status reporting back to the remote Manager Dashboard.
 *   **Smart Security**: Built-in standard Root CA (ISRG Root X1) for seamless out-of-the-box support for HiveMQ and other secure public brokers—no manual certificate pasting required.
 *   **Advanced Lighting Engine**: Smooth 32-bit gamma correction with effects like *Fade, Rainbow, Breathe, Fire, Comet,* and more.
-*   **Intuitive Web Configuration**: Mobile-friendly captive portal for Wi-Fi setup, MQTT credentials, and hardware calibration.
+*   **Intuitive Web Configuration & Remote Control**: 
+    *   **Captive Portal**: Mobile-friendly local portal for Wi-Fi setup, MQTT credentials, and hardware calibration.
+    *   **Dedicated Web App**: A standalone modern [Web App](manager/Friendshiplamp_Web_App_V4_Final.html) for remote triggering of the lamp with custom color and **selectable effects** (Fade, Wipe, Chase, Rainbow, etc.).
 *   **Smart Hardware Control**:
     *   **Capacitive Touch**: For On/Off and continuous brightness dimming.
     *   **Potentiometer**: Direct local color selection.
