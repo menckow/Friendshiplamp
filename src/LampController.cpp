@@ -50,7 +50,11 @@ void LampController::setColorHSV(uint16_t hue) {
     }
 }
 
+// FIX 2: Dirty-Flag – show() nur aufrufen wenn Helligkeit sich wirklich geändert hat.
+// Vorher wurde bei jedem Dimm-Schritt pixels.show() aufgerufen (alle 10ms),
+// was Interrupts blockiert und sichtbares Flackern verursacht.
 void LampController::setBrightness(uint8_t brightness) {
+    if (brightness == _currentBrightness) return; // Kein Update wenn gleich
     _currentBrightness = brightness;
     if (_isLampOn && !_inReceivedColorMode) {
         setAllPixels(_currentColor);

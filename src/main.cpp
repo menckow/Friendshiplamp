@@ -74,5 +74,7 @@ void loop() {
         ESP.restart();
     }
 
-    delay(10);
+    // FIX 3: delay(10) entfernt – blockierte den gesamten µC inkl. NeoPixel-Timing.
+    // Die millis()-basierten Intervalle in InputHandler und LampController
+    // übernehmen jetzt die Taktung ohne den Loop zu blockieren.
 }
