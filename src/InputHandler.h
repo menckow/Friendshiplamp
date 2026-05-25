@@ -21,9 +21,8 @@ private:
     static unsigned long _lastInterruptTime;
     static void IRAM_ATTR isr();
     
-    // Potentiometer – FIX 1: Zustand für Deadband-Filter
-    uint16_t _lastHue = 0;
-    unsigned long _lastPotReadTime = 0;
+    // Potentiometer
+    uint32_t _lastPotColor = 0;
     
     // Touch
     enum TouchState { IDLE, TOUCH_DETECTED, LONG_TOUCH_ACTIVE };
@@ -38,16 +37,7 @@ private:
     uint8_t _touchAboveCount = 0;
 
     static const unsigned long DEBOUNCE_DELAY = 50;
-
-    // FIX 1: Potentiometer-Entprellung
-    // ESP32-ADC rauscht ca. ±20–50 Counts; Deadband von 300 HSV-Schritten
-    // entspricht ~0,5% des Farbraums und filtert das zuverlässig heraus.
-    static const unsigned long POT_READ_INTERVAL = 50;  // ms zwischen ADC-Messungen
-    static const uint16_t     POT_DEADBAND       = 300; // min. HSV-Änderung für Update
-
-    // FIX 2: Langsameres Dimmen reduziert show()-Aufrufe und Interrupt-Blockaden
-    static const unsigned long BRIGHTNESS_ANIM_DELAY = 25;  // war: 10ms
-
+    static const unsigned long BRIGHTNESS_ANIM_DELAY = 10;
     static const uint8_t TOUCH_SAMPLES = 4;              // gemittelte Messungen pro update()
     static const uint8_t TOUCH_CONFIRM_SAMPLES = 4;      // ~40ms Bestätigung vor Zustandswechsel
     static const uint8_t TOUCH_RELEASE_HYSTERESIS = 8;   // Release-Schwelle = threshold + diesen Offset

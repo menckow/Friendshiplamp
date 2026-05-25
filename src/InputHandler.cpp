@@ -20,23 +20,14 @@ void InputHandler::begin(Config& config) {
 
 void InputHandler::update(Config& config) {
     if (_lamp.isInReceivedColorMode()) return;
-
-    // Potentiometer – FIX 1: Deadband + max. alle 50ms lesen
-    // Verhindert Flackern durch ADC-Rauschen des ESP32
+    
+    // Potentiometer
     if (_lamp.isOn()) {
-        unsigned long now = millis();
-        if (now - _lastPotReadTime > POT_READ_INTERVAL) {
-            _lastPotReadTime = now;
-            int raw = analogRead(34); // POTENTIOMETER_PIN
-            uint16_t hue = map(raw, 0, 4095, 0, 65535);
-            // Nur aktualisieren wenn Änderung größer als Deadband (ca. 0,5% Farbraum)
-            if (abs((int)hue - (int)_lastHue) > POT_DEADBAND) {
-                _lastHue = hue;
-                _lamp.setColorHSV(hue);
-            }
-        }
+        int raw = analogRead(34); // POTENTIOMETER_PIN
+        uint16_t hue = map(raw, 0, 4095, 0, 65535);
+        _lamp.setColorHSV(hue);
     }
-
+    
     // Touch (Mittelung + Hysterese + Bestätigungs-Samples gegen elektrisches Rauschen)
     uint32_t sum = 0;
     for (uint8_t i = 0; i < TOUCH_SAMPLES; i++) sum += touchRead(32); // TOUCH_PIN
