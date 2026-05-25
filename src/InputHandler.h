@@ -23,6 +23,8 @@ private:
     
     // Potentiometer
     uint32_t _lastPotColor = 0;
+    uint16_t _lastHue = 0;
+    unsigned long _lastPotReadTime = 0;
     
     // Touch
     enum TouchState { IDLE, TOUCH_DETECTED, LONG_TOUCH_ACTIVE };
@@ -42,6 +44,12 @@ private:
     static const uint8_t TOUCH_CONFIRM_SAMPLES = 4;      // ~40ms Bestätigung vor Zustandswechsel
     static const uint8_t TOUCH_RELEASE_HYSTERESIS = 8;   // Release-Schwelle = threshold + diesen Offset
     static const uint8_t MIN_DIM_BRIGHTNESS = 30;        // Helligkeit wird nicht dunkler als das (sichtbar bleiben)
+
+    // Potentiometer-Entstörung gegen ADC-Rauschen (LED-Flackern bei eingeschalteter Lampe)
+    // ESP32-ADC1 rauscht ±20-50 LSB; ohne Deadband flackern die LEDs durch ständige
+    // setColorHSV()-Aufrufe mit minimal abweichenden gamma-korrigierten Werten.
+    static const unsigned long POT_READ_INTERVAL = 50;   // ms zwischen ADC-Messungen (20Hz statt 100Hz)
+    static const uint16_t      POT_DEADBAND      = 300;  // min. Hue-Änderung für Update (~0,5% Farbraum)
 };
 
 #endif

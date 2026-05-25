@@ -20,14 +20,23 @@ void InputHandler::begin(Config& config) {
 
 void InputHandler::update(Config& config) {
     if (_lamp.isInReceivedColorMode()) return;
-    
-    // Potentiometer
-    if (_lamp.isOn()) {
+
+    unsigned long now = millis();
+
+    // Potentiometer — Deadband + 50ms-Intervall gegen ADC-Rauschen.
+    // Ohne diesen Filter triggert das ESP32-ADC-Rauschen 100x pro Sekunde
+    // setColorHSV() mit minimal abweichenden gamma-korrigierten Werten,
+    // was zu sichtbarem LED-Flackern führt.
+    if (_lamp.isOn() && (now - _lastPotReadTime > POT_READ_INTERVAL)) {
+        _lastPotReadTime = now;
         int raw = analogRead(34); // POTENTIOMETER_PIN
         uint16_t hue = map(raw, 0, 4095, 0, 65535);
-        _lamp.setColorHSV(hue);
+        if (abs((int)hue - (int)_lastHue) > POT_DEADBAND) {
+            _lastHue = hue;
+            _lamp.setColorHSV(hue);
+        }
     }
-    
+
     // Touch (Mittelung + Hysterese + Bestätigungs-Samples gegen elektrisches Rauschen)
     uint32_t sum = 0;
     for (uint8_t i = 0; i < TOUCH_SAMPLES; i++) sum += touchRead(32); // TOUCH_PIN
@@ -47,7 +56,6 @@ void InputHandler::update(Config& config) {
     if (!_touchActive && _touchBelowCount >= TOUCH_CONFIRM_SAMPLES) _touchActive = true;
     else if (_touchActive && _touchAboveCount >= TOUCH_CONFIRM_SAMPLES) _touchActive = false;
 
-    unsigned long now = millis();
     if (_touchActive) {
         if (_touchState == IDLE) { _touchState = TOUCH_DETECTED; _touchStartTime = now; }
         if (_touchState == TOUCH_DETECTED && (now - _touchStartTime) >= 1000) {
