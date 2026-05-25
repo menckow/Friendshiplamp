@@ -78,6 +78,8 @@ void MqttManager::reconnect(Config& config) {
     if (connected) {
         _client.subscribe(config.mqttTopic);
         _client.subscribe("freundschaftslampe/update/trigger");
+        String perDeviceUpdateTopic = "freundschaftslampe/update/trigger/" + clientId;
+        _client.subscribe(perDeviceUpdateTopic.c_str());
         char hexColor[10];
         sprintf(hexColor, "#%06X", config.identityColor);
         _client.publish(statusTopic.c_str(), (String(FW_VERSION) + ":online:" + String(hexColor)).c_str(), true);
@@ -159,15 +161,23 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
                 _instance->_lamp.startReceivedColorMode(color, effect, duration);
             }
         }
-    } else if (strcmp(topic, "freundschaftslampe/update/trigger") == 0) {
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, message);
-        if (!error) {
-            const char* url = doc["url"] | "";
-            const char* version = doc["version"] | "";
-            const char* md5 = doc["md5"] | "";
-            if (strlen(url) > 0 && strcmp(version, _instance->FW_VERSION) != 0 && _instance->_config != nullptr) {
-                _instance->_ota.performUpdate(url, version, md5, _instance->FW_VERSION, *(_instance->_config));
+    } else {
+        bool isBroadcastUpdate = (strcmp(topic, "freundschaftslampe/update/trigger") == 0);
+        bool isPerDeviceUpdate = false;
+        if (!isBroadcastUpdate && _instance->_config != nullptr) {
+            String perDeviceUpdateTopic = "freundschaftslampe/update/trigger/" + _instance->getClientId(*(_instance->_config));
+            isPerDeviceUpdate = (strcmp(topic, perDeviceUpdateTopic.c_str()) == 0);
+        }
+        if (isBroadcastUpdate || isPerDeviceUpdate) {
+            JsonDocument doc;
+            DeserializationError error = deserializeJson(doc, message);
+            if (!error) {
+                const char* url = doc["url"] | "";
+                const char* version = doc["version"] | "";
+                const char* md5 = doc["md5"] | "";
+                if (strlen(url) > 0 && strcmp(version, _instance->FW_VERSION) != 0 && _instance->_config != nullptr) {
+                    _instance->_ota.performUpdate(url, version, md5, _instance->FW_VERSION, *(_instance->_config));
+                }
             }
         }
     }

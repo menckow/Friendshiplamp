@@ -606,8 +606,8 @@
             }
 
             showModal("Update starten?", `Soll das Update für das Gerät ${id} (${device.type}) auf Version ${ver} wirklich drahtlos gestartet werden?`, true, () => {
-                const triggerTopic = `${device.type}/update/trigger`;
-                const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5, target: id });
+                const triggerTopic = `${device.type}/update/trigger/${id}`;
+                const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5 });
                 client.publish(triggerTopic, payloadBuffer);
                 showModal("Gesendet", `OTA Update-Befehl an ${id} wurde versendet!`, false);
             });
