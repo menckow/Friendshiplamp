@@ -99,6 +99,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       </fieldset>
       <input type='submit' value='Speichern & Neustarten'>
     </form>
+
+    <form id='fwForm' enctype='multipart/form-data' onsubmit='return uploadFirmware(event)' style='margin-top: 20px;'>
+      <fieldset><legend>Firmware-Update</legend>
+        <p class='help-text'>Lade eine <code>.bin</code>-Datei hoch, um die Lampe direkt zu aktualisieren. Die Lampe leuchtet w&auml;hrend des Updates blau und startet danach automatisch neu.</p>
+        <label for='fw_file'>Firmware-Datei (.bin):</label>
+        <input type='file' id='fw_file' name='firmware' accept='.bin' required>
+        <label for='fw_md5'>MD5 (optional, 32 Zeichen):</label>
+        <input type='text' id='fw_md5' name='md5' maxlength='32' placeholder='leer lassen wenn nicht bekannt'>
+        <input type='submit' id='fw_submit' value='Firmware hochladen'>
+        <progress id='fw_progress' value='0' max='100' style='width:100%%; margin-top:15px; display:none;'></progress>
+        <div id='fw_status' style='margin-top:10px;'></div>
+      </fieldset>
+    </form>
   </div>
   <script>
     function scanWlan() {
@@ -117,6 +130,70 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       document.getElementById('custom_ca_field').style.display = (tls && !standard) ? 'block' : 'none';
     }
     
+    function uploadFirmware(ev) {
+      ev.preventDefault();
+      const fileInput = document.getElementById('fw_file');
+      const md5Input = document.getElementById('fw_md5');
+      const status = document.getElementById('fw_status');
+      const progress = document.getElementById('fw_progress');
+      const submitBtn = document.getElementById('fw_submit');
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        status.innerHTML = '<span style="color:#b00;">Bitte eine .bin-Datei waehlen.</span>';
+        return false;
+      }
+      const md5 = md5Input.value.trim();
+      if (md5.length > 0 && md5.length !== 32) {
+        status.innerHTML = '<span style="color:#b00;">MD5 muss genau 32 Zeichen lang sein (oder leer).</span>';
+        return false;
+      }
+      if (!confirm('Firmware wird hochgeladen und die Lampe startet automatisch neu. Fortfahren?')) {
+        return false;
+      }
+
+      const fd = new FormData();
+      if (md5.length === 32) fd.append('md5', md5);
+      fd.append('firmware', fileInput.files[0], fileInput.files[0].name);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/update-firmware', true);
+      xhr.upload.onprogress = function(e) {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progress.style.display = 'block';
+          progress.value = pct;
+          status.innerHTML = 'Upload: ' + pct + '%';
+        }
+      };
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+          submitBtn.disabled = false;
+          try {
+            const res = JSON.parse(xhr.responseText || '{}');
+            if (xhr.status === 200 && res.ok) {
+              status.innerHTML = '<span style="color:#0a0;">' + (res.msg || 'Erfolgreich. Neustart...') + '</span>';
+              setTimeout(function(){ location.reload(); }, 8000);
+            } else {
+              status.innerHTML = '<span style="color:#b00;">Fehler: ' + (res.error || ('HTTP ' + xhr.status)) + '</span>';
+            }
+          } catch (e) {
+            status.innerHTML = '<span style="color:#b00;">Unerwartete Antwort (HTTP ' + xhr.status + ')</span>';
+          }
+        }
+      };
+      xhr.onerror = function() {
+        submitBtn.disabled = false;
+        status.innerHTML = '<span style="color:#b00;">Verbindungsfehler beim Upload.</span>';
+      };
+
+      submitBtn.disabled = true;
+      progress.value = 0;
+      progress.style.display = 'block';
+      status.innerHTML = 'Starte Upload...';
+      xhr.send(fd);
+      return false;
+    }
+
     scanWlan();
     toggleCaFields();
   </script>

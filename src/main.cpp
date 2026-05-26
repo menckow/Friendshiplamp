@@ -37,6 +37,8 @@ void setup() {
     // 4. Dienste (MQTT, Webserver)
     mqtt.begin(config);
     ota.setMqttManager(&mqtt);
+    web.setLamp(&lamp);
+    web.setMqtt(&mqtt);
     web.begin();
 
     Serial.println("System bereit.");

@@ -1,6 +1,9 @@
 #include "WebManager.h"
 #include "WebTemplates.h"
+#include "LampController.h"
+#include "MqttManager.h"
 #include <WiFi.h>
+#include <Update.h>
 
 WebManager* WebManager::_instance = nullptr;
 
@@ -71,10 +74,132 @@ void WebManager::setupRoutes() {
         }
     });
 
+    // --- Firmware-Upload-OTA -----------------------------------------------
+    // Multipart-POST mit zwei Lambdas: Upload-Handler (chunkweise) + Request-Handler (final).
+    // Auth wird im Upload-Handler manuell geprueft, weil checkAuth() sonst zu frueh
+    // antwortet und den Upload abbricht.
+    _server.on("/update-firmware", HTTP_POST,
+        // Request-Handler: laeuft, wenn der gesamte Upload durch ist
+        [this](AsyncWebServerRequest *request) {
+            // Falls Auth schon im Upload fehlgeschlagen ist, hier 401 zurueckgeben.
+            if (!_updateAuthOk) {
+                request->requestAuthentication();
+                return;
+            }
+            bool ok = _updateFinishedOk && !Update.hasError();
+            String body;
+            if (ok) {
+                body = "{\"ok\":true,\"msg\":\"Update erfolgreich. Neustart in 1s...\"}";
+            } else {
+                String err = _updateError.length() > 0 ? _updateError : String("Unbekannter Fehler");
+                // Quotes/Backslash im Error escapen
+                err.replace("\\", "\\\\");
+                err.replace("\"", "\\\"");
+                body = String("{\"ok\":false,\"error\":\"") + err + "\"}";
+            }
+            AsyncWebServerResponse *resp = request->beginResponse(ok ? 200 : 500, "application/json", body);
+            resp->addHeader("Connection", "close");
+            request->send(resp);
+            if (ok) _shouldReboot = true;
+            _updateInProgress = false;
+        },
+        // Upload-Handler: laeuft pro Chunk
+        [this](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+            Config& cfg = _configMgr.getConfig();
+
+            if (index == 0) {
+                _updateAuthOk = authenticateUpload(request);
+                if (!_updateAuthOk) {
+                    Serial.println("Web-Upload-OTA: Auth fehlgeschlagen");
+                    return;
+                }
+                _updateInProgress = true;
+                _updateFinishedOk = false;
+                _updateError = "";
+
+                Serial.printf("Web-Upload-OTA startet: %s\n", filename.c_str());
+                if (_lamp) _lamp->setAllPixels(0x0000FF, 100); // Blau waehrend Update
+                if (_mqtt) {
+                    String t = _mqtt->getStatusTopic(cfg);
+                    _mqtt->publish(t.c_str(), "Updating via Web Upload", true);
+                    _mqtt->publish("freundschaftslampe/update/status", "Updating via Web Upload", false);
+                }
+
+                // Optionales MD5 aus Form-Feld 'md5'
+                if (request->hasParam("md5", true)) {
+                    String md5 = request->getParam("md5", true)->value();
+                    md5.trim();
+                    if (md5.length() == 32) {
+                        Update.setMD5(md5.c_str());
+                        Serial.printf("MD5 Hash gesetzt: %s\n", md5.c_str());
+                    } else if (md5.length() > 0) {
+                        _updateError = "MD5 muss genau 32 Zeichen lang sein";
+                        Serial.println("Web-Upload-OTA: " + _updateError);
+                        _updateInProgress = false;
+                        if (_lamp) _lamp->setAllPixels(0xFF0000, 100);
+                        return;
+                    }
+                }
+
+                if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+                    _updateError = Update.errorString();
+                    Serial.println("Web-Upload-OTA: Update.begin failed: " + _updateError);
+                    _updateInProgress = false;
+                    if (_lamp) _lamp->setAllPixels(0xFF0000, 100);
+                    return;
+                }
+            }
+
+            if (!_updateAuthOk || !_updateInProgress) return;
+
+            if (len) {
+                size_t written = Update.write(data, len);
+                if (written != len) {
+                    _updateError = Update.errorString();
+                    Serial.println("Web-Upload-OTA: Update.write failed: " + _updateError);
+                    _updateInProgress = false;
+                    Update.abort();
+                    if (_lamp) _lamp->setAllPixels(0xFF0000, 100);
+                    return;
+                }
+            }
+
+            if (final) {
+                if (Update.end(true)) {
+                    _updateFinishedOk = true;
+                    Serial.printf("Web-Upload-OTA erfolgreich: %u Bytes geschrieben\n", (unsigned)(index + len));
+                    if (_lamp) _lamp->setAllPixels(0x00FF00, 100);
+                    if (_mqtt) {
+                        String t = _mqtt->getStatusTopic(cfg);
+                        _mqtt->publish(t.c_str(), "Web Upload erfolgreich. Reboot...", true);
+                        _mqtt->publish("freundschaftslampe/update/status", "Web Upload erfolgreich. Reboot...", false);
+                    }
+                } else {
+                    _updateError = Update.errorString();
+                    Serial.println("Web-Upload-OTA: Update.end failed: " + _updateError);
+                    if (_lamp) _lamp->setAllPixels(0xFF0000, 100);
+                    if (_mqtt) {
+                        String t = _mqtt->getStatusTopic(cfg);
+                        _mqtt->publish(t.c_str(), String("Web Upload fehlgeschlagen: " + _updateError).c_str(), true);
+                    }
+                }
+            }
+        }
+    );
+
     _server.onNotFound([](AsyncWebServerRequest *request){
         if (request->host() != WiFi.softAPIP().toString()) request->redirect("http://" + WiFi.softAPIP().toString());
         else request->send(404);
     });
+}
+
+bool WebManager::authenticateUpload(AsyncWebServerRequest *request) {
+    // Im AP-Modus ist die Konfig-Seite generell unauth (siehe checkAuth);
+    // selbe Logik fuer den Upload anwenden, damit die Erstinbetriebnahme klappt.
+    if (WiFi.getMode() == WIFI_AP || WiFi.getMode() == WIFI_AP_STA) return true;
+    Config& cfg = _configMgr.getConfig();
+    if (strlen(cfg.adminPassword) == 0 || strcmp(cfg.adminPassword, "none") == 0) return true;
+    return request->authenticate("admin", cfg.adminPassword);
 }
 
 bool WebManager::checkAuth(AsyncWebServerRequest *request) {
