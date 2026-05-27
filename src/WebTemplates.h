@@ -63,8 +63,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
         <label for='mqtt_client_id'>MQTT Client ID:</label>
         <input type='text' id='mqtt_client_id' name='mqtt_client_id' value='%CLIENT_ID%'>
-        <label for='mqtt_topic'>MQTT Topic:</label>
-        <input type='text' id='mqtt_topic' name='mqtt_topic' value='%TOPIC%'>
+        <label for='family_ids'>Familienkreise (kommagetrennt):</label>
+        <input type='text' id='family_ids' name='family_ids' value='%FAMILY_IDS%' placeholder='z.B. schmidt,lieblings'>
+        <div class="help-text">In welchen Familienkreisen ist diese Lampe? Beim Druck sendet sie an alle, und sie empf&auml;ngt aus allen.</div>
         <label for='mqtt_user'>Benutzername:</label>
         <input type='text' id='mqtt_user' name='mqtt_user' value='%MQTT_USER%'>
         <label for='mqtt_pass'>Passwort:</label>

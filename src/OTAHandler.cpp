@@ -80,12 +80,15 @@ void OTAHandler::sendStatusRobust(const char* msg, Config& config) {
     if (_mqtt) {
         Serial.printf("MQTT Status-Update: %s\n", msg);
         _mqtt->forceReconnect(config);
-        
-        String statusTopic = _mqtt->getStatusTopic(config);
-        
-        _mqtt->publish(statusTopic.c_str(), msg, true); // Retained = true
-        _mqtt->publish("freundschaftslampe/update/status", msg, false);
-        
+
+        // v2-Schema: Hauptstatus als JSON nach fl/device/<id>/status,
+        // freie Textmeldung im 'info'-Feld; Backchannel zusaetzlich.
+        _mqtt->publishStatusV2(config, "updating", msg);
+
+        String clientId = _mqtt->getClientId(config);
+        String updateStatusTopic = "fl/device/" + clientId + "/update/status";
+        _mqtt->publish(updateStatusTopic.c_str(), msg, false);
+
         // Den MQTT-Loop mehrfach aufrufen, um das Senden zu forcieren
         // Länger warten (2 Sek), da SSL/TLS Zeit braucht
         for (int i = 0; i < 40; i++) {

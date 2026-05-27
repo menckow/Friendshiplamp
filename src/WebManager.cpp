@@ -35,7 +35,26 @@ void WebManager::setupRoutes() {
         config.mqttTls = request->hasParam("mqtt_tls", true);
         config.useStandardCa = request->hasParam("mqtt_standard_ca", true);
         if (request->hasParam("mqtt_ca", true)) strlcpy(config.mqttCaCert, request->getParam("mqtt_ca", true)->value().c_str(), sizeof(config.mqttCaCert));
-        if (request->hasParam("mqtt_topic", true)) strlcpy(config.mqttTopic, request->getParam("mqtt_topic", true)->value().c_str(), sizeof(config.mqttTopic));
+        if (request->hasParam("family_ids", true)) {
+            // Normalisieren: Whitespace um Kommas trimmen, lowercase fuer Robustheit.
+            String fams = request->getParam("family_ids", true)->value();
+            String cleaned;
+            cleaned.reserve(fams.length());
+            int start = 0;
+            while (start <= (int)fams.length()) {
+                int comma = fams.indexOf(',', start);
+                String part = (comma < 0) ? fams.substring(start) : fams.substring(start, comma);
+                part.trim();
+                part.toLowerCase();
+                if (part.length() > 0) {
+                    if (cleaned.length() > 0) cleaned += ",";
+                    cleaned += part;
+                }
+                if (comma < 0) break;
+                start = comma + 1;
+            }
+            strlcpy(config.familyIds, cleaned.c_str(), sizeof(config.familyIds));
+        }
         if (request->hasParam("mqtt_user", true)) strlcpy(config.mqttUser, request->getParam("mqtt_user", true)->value().c_str(), sizeof(config.mqttUser));
         if (request->hasParam("mqtt_pass", true)) strlcpy(config.mqttPassword, request->getParam("mqtt_pass", true)->value().c_str(), sizeof(config.mqttPassword));
         if (request->hasParam("color", true)) config.identityColor = hexToColor(request->getParam("color", true)->value().c_str());
@@ -120,9 +139,10 @@ void WebManager::setupRoutes() {
                 Serial.printf("Web-Upload-OTA startet: %s\n", filename.c_str());
                 if (_lamp) _lamp->setAllPixels(0x0000FF, 100); // Blau waehrend Update
                 if (_mqtt) {
-                    String t = _mqtt->getStatusTopic(cfg);
-                    _mqtt->publish(t.c_str(), "Updating via Web Upload", true);
-                    _mqtt->publish("freundschaftslampe/update/status", "Updating via Web Upload", false);
+                    _mqtt->publishStatusV2(cfg, "updating", "Web Upload");
+                    String clientId = _mqtt->getClientId(cfg);
+                    String updateStatusTopic = "fl/device/" + clientId + "/update/status";
+                    _mqtt->publish(updateStatusTopic.c_str(), "Updating via Web Upload", false);
                 }
 
                 // Optionales MD5 aus Form-Feld 'md5'
@@ -170,17 +190,20 @@ void WebManager::setupRoutes() {
                     Serial.printf("Web-Upload-OTA erfolgreich: %u Bytes geschrieben\n", (unsigned)(index + len));
                     if (_lamp) _lamp->setAllPixels(0x00FF00, 100);
                     if (_mqtt) {
-                        String t = _mqtt->getStatusTopic(cfg);
-                        _mqtt->publish(t.c_str(), "Web Upload erfolgreich. Reboot...", true);
-                        _mqtt->publish("freundschaftslampe/update/status", "Web Upload erfolgreich. Reboot...", false);
+                        _mqtt->publishStatusV2(cfg, "updating", "Web Upload erfolgreich. Reboot...");
+                        String clientId = _mqtt->getClientId(cfg);
+                        String updateStatusTopic = "fl/device/" + clientId + "/update/status";
+                        _mqtt->publish(updateStatusTopic.c_str(), "Web Upload erfolgreich. Reboot...", false);
                     }
                 } else {
                     _updateError = Update.errorString();
                     Serial.println("Web-Upload-OTA: Update.end failed: " + _updateError);
                     if (_lamp) _lamp->setAllPixels(0xFF0000, 100);
                     if (_mqtt) {
-                        String t = _mqtt->getStatusTopic(cfg);
-                        _mqtt->publish(t.c_str(), String("Web Upload fehlgeschlagen: " + _updateError).c_str(), true);
+                        _mqtt->publishStatusV2(cfg, "error", _updateError.c_str());
+                        String clientId = _mqtt->getClientId(cfg);
+                        String updateStatusTopic = "fl/device/" + clientId + "/update/status";
+                        _mqtt->publish(updateStatusTopic.c_str(), String("Web Upload fehlgeschlagen: " + _updateError).c_str(), false);
                     }
                 }
             }
@@ -233,7 +256,7 @@ String WebManager::templateProcessor(const String& var) {
     if (var == "MQTT_STANDARD_CA_CHECKED") return config.useStandardCa ? "checked" : "";
     if (var == "MQTT_CA") return String(config.mqttCaCert);
     if (var == "CLIENT_ID") return String(config.mqttClientId);
-    if (var == "TOPIC") return String(config.mqttTopic);
+    if (var == "FAMILY_IDS") return String(config.familyIds);
     if (var == "MQTT_USER") return String(config.mqttUser);
     if (var == "MQTT_PASS") return String(config.mqttPassword);
     if (var == "NUM_PIXELS") return String(config.numPixels);

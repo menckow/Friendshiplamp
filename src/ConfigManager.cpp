@@ -39,6 +39,7 @@ void ConfigManager::load() {
     _preferences.getString("effect", _config.effect, 32);
     _config.duration = _preferences.getUInt("duration", 10000);
     _config.touchThreshold = _preferences.getUShort("touch_threshold", 40);
+    _preferences.getString("familyIds", _config.familyIds, sizeof(_config.familyIds));
     _preferences.end();
 }
 
@@ -64,6 +65,7 @@ void ConfigManager::save() {
     _preferences.putString("effect", _config.effect);
     _preferences.putUInt("duration", _config.duration);
     _preferences.putUShort("touch_threshold", _config.touchThreshold);
+    _preferences.putString("familyIds", _config.familyIds);
     _preferences.end();
 }
 

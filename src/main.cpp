@@ -53,21 +53,35 @@ void loop() {
     input.update(config);
     lamp.update(config);
 
-    // Button-Logik (Nachrichten senden)
+    // Button-Logik (Nachrichten senden) — v2-Schema: an alle Familien-Signale fanned-out.
     if (input.isButtonPressed()) {
         JsonDocument doc;
-        doc["client_id"] = config.mqttClientId;
+        doc["client_id"] = mqtt.getClientId(config);
+        doc["sender_type"] = "lamp";
         char hexColor[8];
         sprintf(hexColor, "#%06X", config.identityColor);
         doc["color"] = hexColor;
         doc["effect"] = config.effect;
         doc["duration"] = config.duration;
         doc["ts"] = time(nullptr);
-        
+
         String payload;
         serializeJson(doc, payload);
-        mqtt.publish(config.mqttTopic, payload.c_str());
-        Serial.println("Signal gesendet.");
+
+        auto families = mqtt.getFamilies(config);
+        if (families.empty()) {
+            Serial.println("Signal NICHT gesendet: keine Familien konfiguriert (Webkonfig pruefen).");
+        } else {
+            for (auto& fam : families) {
+                String topic = "fl/family/" + fam + "/signal";
+                mqtt.publish(topic.c_str(), payload.c_str());
+                Serial.println("Signal gesendet -> " + topic);
+            }
+        }
+
+        // Lokales LED-Feedback: bestaetigt den Druck visuell, auch wenn keine
+        // Familie konfiguriert ist oder MQTT gerade nicht verbunden.
+        lamp.startReceivedColorMode(config.identityColor, config.effect, config.duration);
     }
 
     // Neustart-Check

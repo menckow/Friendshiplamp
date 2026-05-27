@@ -12,7 +12,7 @@ struct Config {
   bool mqttTls;
   bool useStandardCa;
   char mqttCaCert[2048];
-  char mqttTopic[64];
+  char mqttTopic[64];        // [deprecated v1] altes Signal-Topic - bleibt fuer Preferences-Kompat erhalten
   char mqttUser[32];
   char mqttPassword[64];
   uint32_t identityColor;
@@ -25,6 +25,10 @@ struct Config {
   char effect[32];
   uint32_t duration;
   uint16_t touchThreshold;
+  // --- v2 -------------------------------------------------------------
+  // Kommaseparierte Liste von Familien-IDs, z.B. "schmidt,lieblings".
+  // Whitespace wird beim Parsen getrimmt.
+  char familyIds[256];
 };
 
 class ConfigManager {
