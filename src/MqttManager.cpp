@@ -252,12 +252,14 @@ void MqttManager::callback(char* topic, byte* payload, unsigned int length) {
         }
 
         // Lampen reagieren nur auf Signale von anderen Lampen, nicht auf
-        // PIR-Trigger der Box. Empty sender_type (= aeltere v2-Sender ohne
-        // Typkennung) wird zugelassen, damit nichts unbemerkt verloren geht.
+        // PIR-Trigger einer Box. Wir filtern per Praefix "box", damit alle
+        // Box-Varianten (box, box-a1s, ...) gemeinsam ausgeschlossen sind.
+        // Empty sender_type (= aeltere v2-Sender ohne Typkennung) wird
+        // zugelassen, damit nichts unbemerkt verloren geht.
         if (doc["sender_type"].is<const char*>()) {
-            const char* senderType = doc["sender_type"];
-            if (senderType && strcmp(senderType, "box") == 0) {
-                Serial.println("Signal ignoriert: Sender ist eine Box");
+            String senderType = String((const char*)doc["sender_type"]);
+            if (senderType.startsWith("box")) {
+                Serial.println("Signal ignoriert: Sender ist eine Box (" + senderType + ")");
                 return;
             }
         }

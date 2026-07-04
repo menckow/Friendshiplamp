@@ -394,9 +394,10 @@
                             <select id="fam-id" style="background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 15px; min-width: 160px; font-family: inherit;">
                                 <option value="">-- Familie wählen --</option>
                             </select>
-                            <select id="fam-type" style="background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 15px; min-width: 140px; font-family: inherit;">
+                            <select id="fam-type" style="background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 15px; min-width: 160px; font-family: inherit;">
                                 <option value="lamp">Nur Lampen</option>
-                                <option value="box">Nur Boxen</option>
+                                <option value="box">Nur Boxen (V6)</option>
+                                <option value="box-a1s">Nur Boxen (A1S)</option>
                             </select>
                             <button type="button" class="btn-update" onclick="broadcastFamilyUpdate()">Familie upgraden</button>
                         </div>
@@ -412,9 +413,10 @@
                             <input type="text" id="glob-url" placeholder="Firmware URL">
                             <input type="text" id="glob-version" placeholder="Version" style="max-width: 100px;">
                             <input type="text" id="glob-md5" placeholder="MD5 Hash (opt)" style="max-width: 130px;">
-                            <select id="glob-type" style="background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 15px; min-width: 140px; font-family: inherit;">
+                            <select id="glob-type" style="background: rgba(0,0,0,0.2); color: white; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 15px; min-width: 160px; font-family: inherit;">
                                 <option value="lamp">Nur Lampen</option>
-                                <option value="box">Nur Boxen</option>
+                                <option value="box">Nur Boxen (V6)</option>
+                                <option value="box-a1s">Nur Boxen (A1S)</option>
                             </select>
                             <button type="button" class="btn-update" onclick="broadcastGlobalUpdate()" style="background: linear-gradient(135deg, #ef4444, #f59e0b); box-shadow: 0 4px 15px rgba(239,68,68,0.3);">ALLE upgraden (Notfall)</button>
                         </div>
@@ -626,13 +628,18 @@
             renderTable();
         }
 
-        // Hilfsfunktionen fuer Typ-Normalisierung (v1 verwendet 'freundschaftslampe'/'zwitscherbox',
-        // v2 verwendet 'lamp'/'box').
+        // Hilfsfunktionen fuer Typ-Normalisierung.
+        // v1: 'freundschaftslampe', 'zwitscherbox'.
+        // v2: 'lamp', 'box' (V6-Box), 'box-a1s' (A1S-Box). Beide Box-Varianten
+        // brauchen unterschiedliche Firmware-Images, werden aber gemeinsam in
+        // isBoxType erkannt.
         function isLampType(t) { return t === 'lamp' || t === 'freundschaftslampe'; }
-        function isBoxType(t)  { return t === 'box'  || t === 'zwitscherbox'; }
+        function isBoxType(t)  { return t === 'box'  || t === 'box-a1s' || t === 'zwitscherbox'; }
         function typeLabel(t) {
-            if (isLampType(t)) return 'Lampe';
-            if (isBoxType(t))  return 'Box';
+            if (t === 'lamp' || t === 'freundschaftslampe') return 'Lampe';
+            if (t === 'box-a1s') return 'Box (A1S)';
+            if (t === 'box') return 'Box (V6)';
+            if (t === 'zwitscherbox') return 'Box (v1)';
             return t;
         }
 
@@ -813,6 +820,15 @@
 
         // --- Neues Schema v2: Familien- und globale OTA ------------------------
 
+        // Erlaubte Firmware-Image-Typen fuer v2-OTA-Topics.
+        const V2_OTA_TYPES = ['lamp', 'box', 'box-a1s'];
+        function v2TypeLabel(t) {
+            if (t === 'lamp')    return 'Lampen';
+            if (t === 'box')     return 'V6-Boxen';
+            if (t === 'box-a1s') return 'A1S-Boxen';
+            return t;
+        }
+
         function broadcastFamilyUpdate() {
             const family = document.getElementById('fam-id').value.trim();
             const type = document.getElementById('fam-type').value;
@@ -824,8 +840,8 @@
                 showModal("Familie fehlt", "Bitte zuerst eine Familie aus dem Dropdown auswählen.", false);
                 return;
             }
-            if (type !== 'lamp' && type !== 'box') {
-                showModal("Typ fehlt", "Bitte 'Nur Lampen' oder 'Nur Boxen' wählen — Lampe und Box verwenden unterschiedliche Firmware-Images.", false);
+            if (!V2_OTA_TYPES.includes(type)) {
+                showModal("Typ fehlt", "Bitte einen Geräte-Typ wählen — Lampen, V6-Boxen und A1S-Boxen verwenden jeweils unterschiedliche Firmware-Images.", false);
                 return;
             }
             if (!url || !ver) {
@@ -833,12 +849,12 @@
                 return;
             }
 
-            const typeLabel = type === 'lamp' ? 'Lampen' : 'Boxen';
-            showModal("Familien-Update", `Sollen wirklich alle ${typeLabel} der Familie "${family}" auf Version ${ver} aktualisiert werden?`, true, () => {
+            const tLabel = v2TypeLabel(type);
+            showModal("Familien-Update", `Sollen wirklich alle ${tLabel} der Familie "${family}" auf Version ${ver} aktualisiert werden?`, true, () => {
                 const triggerTopic = `fl/family/${family}/update/trigger/${type}`;
                 const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5 });
                 client.publish(triggerTopic, payloadBuffer);
-                showModal("Gesendet", `Update-Befehl an ${typeLabel} der Familie "${family}" gesendet (${triggerTopic}).`, false);
+                showModal("Gesendet", `Update-Befehl an ${tLabel} der Familie "${family}" gesendet (${triggerTopic}).`, false);
             });
         }
 
@@ -848,8 +864,8 @@
             const ver = document.getElementById('glob-version').value.trim();
             const md5 = document.getElementById('glob-md5').value.trim();
 
-            if (type !== 'lamp' && type !== 'box') {
-                showModal("Typ fehlt", "Bitte 'Nur Lampen' oder 'Nur Boxen' wählen — Lampe und Box verwenden unterschiedliche Firmware-Images.", false);
+            if (!V2_OTA_TYPES.includes(type)) {
+                showModal("Typ fehlt", "Bitte einen Geräte-Typ wählen — Lampen, V6-Boxen und A1S-Boxen verwenden jeweils unterschiedliche Firmware-Images.", false);
                 return;
             }
             if (!url || !ver) {
@@ -857,12 +873,12 @@
                 return;
             }
 
-            const typeLabel = type === 'lamp' ? 'Lampen' : 'Boxen';
-            showModal("GLOBALER Notfall-Push", `Achtung: Sollen WIRKLICH ALLE ${typeLabel} aller Familien (v2-Schema) auf Version ${ver} aktualisiert werden?`, true, () => {
+            const tLabel = v2TypeLabel(type);
+            showModal("GLOBALER Notfall-Push", `Achtung: Sollen WIRKLICH ALLE ${tLabel} aller Familien (v2-Schema) auf Version ${ver} aktualisiert werden?`, true, () => {
                 const triggerTopic = `fl/_global/update/trigger/${type}`;
                 const payloadBuffer = JSON.stringify({ url: url, version: ver, md5: md5 });
                 client.publish(triggerTopic, payloadBuffer);
-                showModal("Gesendet", `Globaler Notfall-Push an ${typeLabel} gesendet (${triggerTopic}).`, false);
+                showModal("Gesendet", `Globaler Notfall-Push an ${tLabel} gesendet (${triggerTopic}).`, false);
             });
         }
     </script>

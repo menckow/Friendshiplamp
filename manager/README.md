@@ -38,7 +38,7 @@ Jede Gerätezeile zeigt:
 | Spalte | Bedeutung |
 |---|---|
 | ID | Identitätsfarbe als Kreis + Client-ID + Schema-Pille (grün `v2` oder gelb `v1`) |
-| Typ | `Lampe` oder `Box` |
+| Typ | `Lampe`, `Box (V6)`, `Box (A1S)` oder `Box (v1)`. Die beiden Box-Varianten brauchen unterschiedliche Firmware-Binaries — der Typ ergibt sich aus dem `type`-Feld der Status-JSON (`lamp`, `box`, `box-a1s`). |
 | Version | Firmware-Version aus `fw` (v2) bzw. erstem Feld des `:`-Payload (v1) |
 | Status | `online` / `offline` / Update-Status (gelb hinterlegt wenn `update` im Text) |
 | Aktion | **Update**-Button für Einzelgerät |
@@ -51,10 +51,10 @@ Im Grid unter der Tabelle gibt es vier Update-Karten:
 |---|---|---|
 | **Update: Lampen (v1)** | Alle v1-Lampen | `freundschaftslampe/update/trigger` |
 | **Update: Zwitscherboxen (v1)** | Alle v1-Boxen | `zwitscherbox/update/trigger` |
-| **Update: Pro Familie (v2)** | Lampen *oder* Boxen einer Familie | `fl/family/<id>/update/trigger/<type>` |
-| **Update: Globaler Notfall-Push (v2)** | Alle Lampen *oder* alle Boxen | `fl/_global/update/trigger/<type>` |
+| **Update: Pro Familie (v2)** | Lampen, V6-Boxen oder A1S-Boxen einer Familie | `fl/family/<id>/update/trigger/<type>` |
+| **Update: Globaler Notfall-Push (v2)** | Alle Lampen, V6-Boxen oder A1S-Boxen | `fl/_global/update/trigger/<type>` |
 
-Lampen und Boxen brauchen unterschiedliche Firmware-Images, deshalb haben die v2-Karten einen Typ-Selektor (kein „Beides"). Das Familien-Dropdown füllt sich automatisch aus den gesehenen Geräten — also: wenn keine Familie in der Liste, hat noch keine v2-Box/-Lampe sich gemeldet.
+`<type>` ist `lamp`, `box` (V6) oder `box-a1s` (A1S). Die drei Geräte-Typen brauchen unterschiedliche Firmware-Images — deshalb gibt es bewusst kein „Alles auf einmal", sondern einen Typ-Selektor in jeder Karte. Das Familien-Dropdown füllt sich automatisch aus den gesehenen Geräten — also: wenn keine Familie in der Liste, hat noch keine v2-Box/-Lampe sich gemeldet.
 
 Jeder Update-Vorgang fragt vorher per Modal um Bestätigung und zeigt das tatsächlich verwendete Topic an.
 
